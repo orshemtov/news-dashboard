@@ -144,5 +144,5 @@ def article_factory(db_session):
 ## What to ALWAYS mock
 
 - External HTTP calls (RSS feeds, Telegram API)
-- LLM/embedding API calls (Ollama, OpenAI)
+- LLM/embedding API calls (Ollama)
 - `sentence-transformers` model loading (slow, large)

@@ -62,7 +62,7 @@ Search for any public Telegram channel and add it with one click:
 | Backend | Python 3.13, FastAPI, SQLAlchemy (async) + asyncpg, Alembic |
 | Frontend | React 19, TypeScript, Vite 7, Tailwind CSS 4, shadcn/ui |
 | Database | PostgreSQL 16 with pgvector (384-dim embeddings) |
-| Embeddings | sentence-transformers (paraphrase-multilingual-MiniLM-L12-v2) or OpenAI |
+| Embeddings | sentence-transformers (paraphrase-multilingual-MiniLM-L12-v2) |
 | Task Runner | [mise](https://mise.jdx.dev/) |
 
 ## Prerequisites
@@ -160,26 +160,13 @@ mise run infra-reset    # Stop containers and delete all data
 
 All configuration is through environment variables in `.env`. The defaults in `.env.example` work out of the box for local development.
 
-### Embedding Provider
-
-By default, embeddings are computed locally using sentence-transformers. To use OpenAI instead:
-
-```env
-EMBEDDING_PROVIDER=openai
-OPENAI_API_KEY=sk-...
-OPENAI_EMBEDDING_MODEL=text-embedding-3-small
-```
-
 ### All Environment Variables
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/news_dashboard` | PostgreSQL connection string |
-| `EMBEDDING_PROVIDER` | `local` | Embedding provider (`local` or `openai`) |
-| `EMBEDDING_MODEL` | `paraphrase-multilingual-MiniLM-L12-v2` | Local embedding model |
+| `EMBEDDING_MODEL` | `paraphrase-multilingual-MiniLM-L12-v2` | Embedding model (sentence-transformers) |
 | `EMBEDDING_DIMENSIONS` | `384` | Embedding vector dimensions |
-| `OPENAI_API_KEY` | | OpenAI API key (required if using OpenAI) |
-| `OPENAI_EMBEDDING_MODEL` | `text-embedding-3-small` | OpenAI embedding model |
 | `DEDUP_SIMILARITY_THRESHOLD` | `0.92` | Cosine similarity threshold for dedup |
 | `DEDUP_WINDOW_HOURS` | `24` | Time window for dedup comparison |
 | `TELEGRAM_API_ID` | | Telegram API ID |
