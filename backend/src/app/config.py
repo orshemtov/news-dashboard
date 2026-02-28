@@ -17,14 +17,12 @@ class Settings(BaseSettings):
     # AI – LLM
     llm_provider: Literal["ollama", "openai"] = "ollama"
     llm_model: str = "llama3.1:8b"
-    ollama_base_url: str = "http://localhost:11434"
     openai_api_key: str | None = None
-    openai_model: str = "gpt-5.2"
+    openai_model: str = "gpt-4o-mini"
 
     # AI – Embeddings
     embedding_provider: Literal["local", "openai"] = "local"
     embedding_model: str = "paraphrase-multilingual-MiniLM-L12-v2"
-    embedding_dimensions: int = 384
     openai_embedding_model: str = "text-embedding-3-small"
 
     # Dedup
@@ -37,7 +35,6 @@ class Settings(BaseSettings):
     telegram_session_name: str = "news_dashboard"
 
     # Ingestion
-    telegram_poll_interval_seconds: int = 60
     initial_backfill_hours: int = 24
     polling_enabled: bool = True
     polling_interval_seconds: int = 60
