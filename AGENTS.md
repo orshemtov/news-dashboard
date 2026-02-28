@@ -34,7 +34,7 @@ news-dashboard/
 | Frontend | React 19, TypeScript 5.9, Vite 7, Tailwind CSS 4, shadcn/ui |
 | Database | PostgreSQL 16 with pgvector extension (384-dim embeddings) |
 | AI/LLM | Ollama (default: llama3.1:8b) for future features |
-| Embeddings | sentence-transformers (default: paraphrase-multilingual-MiniLM-L12-v2) or OpenAI |
+| Embeddings | sentence-transformers (default: paraphrase-multilingual-MiniLM-L12-v2) |
 | Package Managers | uv (backend), pnpm (frontend) |
 | Task Runner | mise (replaces Make) |
 

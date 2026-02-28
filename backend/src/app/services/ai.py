@@ -24,10 +24,8 @@ class AIService:
         self._settings = settings or get_settings()
 
     def _get_model(self) -> str:
-        """Return the pydantic-ai model identifier based on provider config."""
-        if self._settings.llm_provider == "ollama":
-            return f"ollama:{self._settings.llm_model}"
-        return f"openai:{self._settings.openai_model}"
+        """Return the pydantic-ai model identifier."""
+        return f"ollama:{self._settings.llm_model}"
 
     async def summarize(self, content: str, language: str | None = None) -> str:
         """Summarize article content.

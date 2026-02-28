@@ -1,5 +1,4 @@
 from functools import lru_cache
-from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -14,16 +13,11 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/news_dashboard"
 
-    # AI – LLM
-    llm_provider: Literal["ollama", "openai"] = "ollama"
+    # AI – LLM (Ollama)
     llm_model: str = "llama3.1:8b"
-    openai_api_key: str | None = None
-    openai_model: str = "gpt-4o-mini"
 
-    # AI – Embeddings
-    embedding_provider: Literal["local", "openai"] = "local"
+    # AI – Embeddings (local sentence-transformers)
     embedding_model: str = "paraphrase-multilingual-MiniLM-L12-v2"
-    openai_embedding_model: str = "text-embedding-3-small"
 
     # Dedup
     dedup_similarity_threshold: float = 0.92

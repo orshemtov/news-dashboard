@@ -12,7 +12,6 @@ dependencies = [
     "asyncpg>=0.31.0",
     "fastapi[standard]>=0.134.0",
     "loguru>=0.7.3",
-    "openai>=1.0.0",
     "pgvector>=0.4.2",
     "pydantic-ai>=1.63.0",
     "pydantic-settings>=2.13.1",
