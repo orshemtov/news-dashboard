@@ -1,4 +1,3 @@
-from app.api.ai import router as ai_router
 from app.api.articles import router as articles_router
 from app.api.chat import router as chat_router
 from app.api.search import router as search_router
@@ -11,11 +10,9 @@ all_routers = [
     search_router,
     stats_router,
     chat_router,
-    ai_router,
 ]
 
 __all__ = [
-    "ai_router",
     "all_routers",
     "articles_router",
     "chat_router",

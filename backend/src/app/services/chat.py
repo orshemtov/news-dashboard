@@ -3,6 +3,8 @@ from uuid import UUID
 
 from loguru import logger
 from pydantic_ai import Agent
+from pydantic_ai.models.openai import OpenAIChatModel
+from pydantic_ai.providers.ollama import OllamaProvider
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
@@ -78,10 +80,19 @@ class ChatService:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _get_model(self) -> str:
+    def _get_model(self) -> OpenAIChatModel | str:
+        if self._settings.llm_provider == "ollama":
+            base_url = self._settings.ollama_base_url.rstrip("/") + "/v1"
+            return OpenAIChatModel(
+                model_name=self._settings.llm_model,
+                provider=OllamaProvider(base_url=base_url),
+            )
+        return f"openai:{self._settings.openai_model}"
+
+    def _get_model_name(self) -> str:
         if self._settings.llm_provider == "ollama":
             return f"ollama:{self._settings.llm_model}"
-        return f"openai:{self._settings.openai_model}"
+        return self._settings.openai_model
 
     @staticmethod
     def _build_context(articles: list[Article]) -> str:

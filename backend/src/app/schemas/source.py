@@ -6,8 +6,8 @@ from pydantic import BaseModel, ConfigDict
 
 class SourceBase(BaseModel):
     name: str
-    source_type: str  # telegram, rss, manual
-    config: dict = {}  # RSS URL, Telegram channel info, etc.
+    source_type: str  # telegram
+    config: dict = {}  # Telegram channel info
     poll_interval_seconds: int = 300
     enabled: bool = True
 

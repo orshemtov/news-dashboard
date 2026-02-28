@@ -1,14 +1,28 @@
 import hashlib
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
-from app.ingestors import RawArticle, RSSIngestor, TelegramIngestor
+from app.ingestors import RawArticle, TelegramIngestor
 from app.ingestors.base import BaseIngestor
 from app.models import Article, Source
+from app.services.embedding import EmbeddingService
+
+# ------------------------------------------------------------------
+# Module-level embedding service (lazy singleton)
+# ------------------------------------------------------------------
+_embedding_service: EmbeddingService | None = None
+
+
+def _get_embedding_service() -> EmbeddingService:
+    global _embedding_service
+    if _embedding_service is None:
+        _embedding_service = EmbeddingService()
+    return _embedding_service
+
 
 # ------------------------------------------------------------------
 # Dedup
@@ -26,27 +40,14 @@ def _compute_dedup_hash(content: str) -> str:
 # ------------------------------------------------------------------
 
 
-def _build_ingestor(source: Source) -> BaseIngestor:
+async def _build_ingestor(source: Source) -> BaseIngestor:
     """Instantiate the correct ingestor for *source*."""
     config: dict = source.config or {}
 
-    if source.source_type == "rss":
-        return RSSIngestor(source_name=source.name, config=config)
-
     if source.source_type == "telegram":
-        from telethon import TelegramClient
+        from app.services.telegram_client import get_telegram_client
 
-        settings = get_settings()
-        if not settings.telegram_api_id or not settings.telegram_api_hash:
-            raise ValueError(
-                "Telegram API credentials (telegram_api_id, telegram_api_hash) are not configured."
-            )
-
-        client = TelegramClient(
-            settings.telegram_session_name,
-            settings.telegram_api_id,
-            settings.telegram_api_hash,
-        )
+        client = await get_telegram_client()
         return TelegramIngestor(
             source_name=source.name,
             config=config,
@@ -89,10 +90,29 @@ def _raw_to_article(raw: RawArticle, source: Source, dedup_hash: str) -> Article
 # ------------------------------------------------------------------
 
 
-async def ingest_source(source: Source, db: AsyncSession) -> int:
+async def ingest_source(
+    source: Source,
+    db: AsyncSession,
+    *,
+    backfill_hours: int | None = None,
+    generate_embeddings: bool = True,
+) -> int:
     """Ingest articles from a single *source*. Returns the number of new
-    articles stored."""
-    ingestor = _build_ingestor(source)
+    articles stored.
+
+    Parameters
+    ----------
+    backfill_hours:
+        If set, articles older than this many hours are discarded.
+        Defaults to the ``initial_backfill_hours`` setting.
+    generate_embeddings:
+        Whether to generate vector embeddings for each article.
+    """
+    settings = get_settings()
+    if backfill_hours is None:
+        backfill_hours = settings.initial_backfill_hours
+
+    ingestor = await _build_ingestor(source)
 
     try:
         raw_articles = await ingestor.fetch()
@@ -103,8 +123,29 @@ async def ingest_source(source: Source, db: AsyncSession) -> int:
         await db.flush()
         return 0
 
-    new_count = 0
+    # Filter by backfill window
+    cutoff = datetime.now(tz=UTC) - timedelta(hours=backfill_hours)
+    filtered: list[RawArticle] = []
     for raw in raw_articles:
+        pub = raw.published_at
+        # Make naive datetimes UTC-aware for comparison
+        if pub.tzinfo is None:
+            pub = pub.replace(tzinfo=UTC)
+        if pub >= cutoff:
+            filtered.append(raw)
+
+    if len(filtered) < len(raw_articles):
+        logger.info(
+            "Source {}: filtered {} -> {} articles (backfill window: {}h)",
+            source.name,
+            len(raw_articles),
+            len(filtered),
+            backfill_hours,
+        )
+
+    new_count = 0
+    new_articles: list[Article] = []
+    for raw in filtered:
         dedup_hash = _compute_dedup_hash(raw.content)
 
         if await _dedup_hash_exists(db, dedup_hash):
@@ -117,7 +158,27 @@ async def ingest_source(source: Source, db: AsyncSession) -> int:
 
         article = _raw_to_article(raw, source, dedup_hash)
         db.add(article)
+        new_articles.append(article)
         new_count += 1
+
+    # Generate embeddings in batch for new articles
+    if generate_embeddings and new_articles:
+        try:
+            emb_service = _get_embedding_service()
+            texts = [f"{a.title or ''}\n{a.content[:1000]}" for a in new_articles]
+            embeddings = await emb_service.embed_batch(texts)
+            for article, emb in zip(new_articles, embeddings, strict=True):
+                article.embedding = emb
+            logger.info(
+                "Source {}: generated {} embeddings",
+                source.name,
+                len(embeddings),
+            )
+        except Exception:
+            logger.warning(
+                "Source {}: embedding generation failed, articles stored without embeddings",
+                source.name,
+            )
 
     # Update source bookkeeping
     source.last_polled_at = datetime.now(tz=UTC)
@@ -126,10 +187,11 @@ async def ingest_source(source: Source, db: AsyncSession) -> int:
     await db.flush()
 
     logger.info(
-        "Source {}: stored {} new articles ({} fetched, rest deduplicated)",
+        "Source {}: stored {} new articles ({} fetched, {} after backfill filter)",
         source.name,
         new_count,
         len(raw_articles),
+        len(filtered),
     )
     return new_count
 

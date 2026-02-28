@@ -15,8 +15,6 @@ import type {
   SourceTestRequest,
   SourceTestResponse,
   SourceUpdate,
-  SummarizeResponse,
-  TranslateResponse,
 } from '@/types';
 
 const api = axios.create({
@@ -70,8 +68,18 @@ export const testSource = (data: SourceTestRequest) =>
 export const getSourcePresets = () =>
   api.get<SourcePreset[]>('/sources/presets').then((r) => r.data);
 
+export const ingestSource = (id: string) =>
+  api.post<{ source: string; new_articles: number }>(`/sources/${id}/ingest`).then((r) => r.data);
+
+export interface TelegramChannelResult {
+  id: number | null;
+  title: string | null;
+  username: string | null;
+  participants_count: number | null;
+}
+
 export const searchTelegramChannels = (query: string) =>
-  api.get<{ message: string }>('/sources/telegram/search', { params: { query } }).then((r) => r.data);
+  api.get<TelegramChannelResult[]>('/sources/telegram/search', { params: { query } }).then((r) => r.data);
 
 // ---------------------------------------------------------------------------
 // Search
@@ -102,15 +110,5 @@ export const getConversation = (id: string) =>
 
 export const deleteConversation = (id: string) =>
   api.delete<void>(`/chat/conversations/${id}`);
-
-// ---------------------------------------------------------------------------
-// AI
-// ---------------------------------------------------------------------------
-
-export const summarizeArticle = (id: string) =>
-  api.post<SummarizeResponse>(`/ai/summarize/${id}`).then((r) => r.data);
-
-export const translateArticle = (id: string, target_language: string) =>
-  api.post<TranslateResponse>(`/ai/translate/${id}`, null, { params: { target_language } }).then((r) => r.data);
 
 export default api;

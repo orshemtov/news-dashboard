@@ -156,22 +156,3 @@ export interface DashboardStats {
   languages: Record<string, number>;
   latest_ingestion: string | null;
 }
-
-// ---------------------------------------------------------------------------
-// AI
-// ---------------------------------------------------------------------------
-
-export interface SummarizeResponse {
-  article_id: string;
-  title: string | null;
-  summary: string;
-  status: string;
-}
-
-export interface TranslateResponse {
-  article_id: string;
-  title: string | null;
-  target_language: string;
-  translated_content: string;
-  status: string;
-}

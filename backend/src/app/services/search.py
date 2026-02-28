@@ -94,7 +94,7 @@ class SearchService:
             FROM articles
             WHERE embedding IS NOT NULL
             {self._build_raw_filters(request)}
-            ORDER BY embedding <=> :query_embedding::vector
+            ORDER BY embedding <=> cast(:query_embedding AS vector)
             LIMIT :limit
         """)
 

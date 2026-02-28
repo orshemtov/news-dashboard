@@ -27,3 +27,10 @@ node_modules/
 
 # Logs
 *.log
+
+# Telegram session files
+*.session
+*.session-journal
+
+# OpenCode / Playwright screenshots
+.opencode/screenshots/

@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=("../.env", ".env"),
         env_file_encoding="utf-8",
         extra="ignore",
     )
@@ -40,8 +40,10 @@ class Settings(BaseSettings):
     telegram_session_name: str = "news_dashboard"
 
     # Ingestion
-    rss_poll_interval_seconds: int = 300
     telegram_poll_interval_seconds: int = 60
+    initial_backfill_hours: int = 24
+    polling_enabled: bool = True
+    polling_interval_seconds: int = 300
 
 
 @lru_cache

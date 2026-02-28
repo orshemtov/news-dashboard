@@ -1,30 +1,70 @@
-import { useLocation } from 'react-router-dom';
-import { MessageSquare } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import { Newspaper, Radio, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
-const pageTitles: Record<string, string> = {
-  '/feed': 'News Feed',
-  '/search': 'Search',
-  '/sources': 'Sources',
-  '/stats': 'Dashboard',
-  '/chat': 'Chat',
-};
 
-interface HeaderProps {
-  onOpenChat: () => void;
-}
-
-export function Header({ onOpenChat }: HeaderProps) {
+export function Header() {
   const location = useLocation();
-  const title = pageTitles[location.pathname] ?? 'News Dashboard';
+  const [dark, setDark] = useState(() =>
+    document.documentElement.classList.contains('dark'),
+  );
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark);
+  }, [dark]);
 
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background/95 px-6 backdrop-blur supports-[backdrop-filter]:bg-background/60">
-      <h1 className="text-lg font-semibold">{title}</h1>
-      <Button variant="outline" size="sm" onClick={onOpenChat}>
-        <MessageSquare className="size-4" />
-        Chat
-      </Button>
+    <header className="sticky top-0 z-30 border-b bg-background/80 backdrop-blur-lg">
+      <div className="mx-auto flex h-14 max-w-6xl items-center justify-between px-4 sm:px-6">
+        {/* Left: branding */}
+        <Link to="/" className="flex items-center gap-2">
+          <Newspaper className="size-5 text-primary" />
+          <span className="text-lg font-semibold tracking-tight">
+            News Feed
+          </span>
+        </Link>
+
+        {/* Right: nav + toggle */}
+        <div className="flex items-center gap-1">
+          <Button
+            variant={location.pathname === '/' ? 'secondary' : 'ghost'}
+            size="sm"
+            asChild
+          >
+            <Link to="/">
+              <Newspaper className="size-4" />
+              <span className="hidden sm:inline">Feed</span>
+            </Link>
+          </Button>
+          <Button
+            variant={location.pathname === '/sources' ? 'secondary' : 'ghost'}
+            size="sm"
+            asChild
+          >
+            <Link to="/sources">
+              <Radio className="size-4" />
+              <span className="hidden sm:inline">Sources</span>
+            </Link>
+          </Button>
+
+          <div className="mx-1 h-5 w-px bg-border" />
+
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-8"
+            onClick={() => setDark((d) => !d)}
+            aria-label="Toggle dark mode"
+          >
+            {dark ? (
+              <Sun className="size-4" />
+            ) : (
+              <Moon className="size-4" />
+            )}
+          </Button>
+        </div>
+      </div>
     </header>
   );
 }

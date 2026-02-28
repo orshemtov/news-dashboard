@@ -1,4 +1,6 @@
 import contextlib
+import re
+import unicodedata
 from datetime import UTC, datetime
 from typing import Any
 
@@ -80,6 +82,11 @@ class TelegramIngestor(BaseIngestor):
             if not content:
                 continue
 
+            # Clean Telegram formatting
+            content = _clean_telegram_content(content)
+            if not content:
+                continue
+
             published_at: datetime = msg.date or datetime.now(tz=UTC)
             if published_at.tzinfo is None:
                 published_at = published_at.replace(tzinfo=UTC)
@@ -87,7 +94,7 @@ class TelegramIngestor(BaseIngestor):
             raw_data: dict = {}
             if msg.to_dict is not None:
                 with contextlib.suppress(Exception):
-                    raw_data = msg.to_dict()
+                    raw_data = _make_json_safe(msg.to_dict())
 
             fwd_meta: dict = {}
             if msg.forward is not None:
@@ -104,7 +111,7 @@ class TelegramIngestor(BaseIngestor):
                     content=content,
                     url=_build_message_url(self._channel, msg.id),
                     author=_get_author(msg),
-                    language=None,
+                    language=_detect_language(content),
                     published_at=published_at,
                     raw_data=raw_data,
                     metadata=fwd_meta,
@@ -161,12 +168,78 @@ async def search_channels(
 # ----------------------------------------------------------------------
 
 
+def _make_json_safe(obj: Any) -> Any:
+    """Recursively convert non-JSON-serializable values (datetime, bytes, etc.)."""
+    if isinstance(obj, dict):
+        return {k: _make_json_safe(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_make_json_safe(v) for v in obj]
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    if isinstance(obj, bytes):
+        return obj.hex()
+    # Fall back to str for any other exotic types
+    try:
+        # Primitives (str, int, float, bool, None) are fine
+        if obj is None or isinstance(obj, (str, int, float, bool)):
+            return obj
+    except Exception:
+        pass
+    return str(obj)
+
+
 def _extract_message_content(msg: Any) -> str:
     """Return text content from a Telegram message, including captions."""
     text: str = getattr(msg, "text", None) or ""
     if not text:
         text = getattr(msg, "message", None) or ""
     return text.strip()
+
+
+def _clean_telegram_content(text: str) -> str:
+    """Strip Telegram markdown formatting and navigation cruft from content."""
+    # Remove empty markdown links: [ ](url)
+    text = re.sub(r"\[\s*\]\([^)]*\)", "", text)
+    # Convert markdown links to just the text: [visible](url) -> visible
+    text = re.sub(r"\[([^\]]+)\]\([^)]*\)", r"\1", text)
+    # Remove markdown bold: **text** -> text
+    text = re.sub(r"\*\*([^*]+)\*\*", r"\1", text)
+    # Remove markdown italic: __text__ -> text
+    text = re.sub(r"__([^_]+)__", r"\1", text)
+    # Remove single asterisk emphasis: *text* -> text
+    text = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"\1", text)
+    # Remove bare URLs
+    text = re.sub(r"https?://\S+", "", text)
+    # Remove common navigation emojis
+    text = re.sub(r"[👈🏽👉🏽⬇️⬆️➡️⬅️🔗📢📌]+", "", text)
+    # Remove Hebrew navigation prompts
+    text = re.sub(r"לקריאה?\s+נוחה?\s+(במחשב|בנייד)", "", text)
+    text = re.sub(r"הצטרפו\s+ל(ערוץ|קבוצה)", "", text)
+    # Collapse whitespace
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    text = re.sub(r"[ \t]+", " ", text)
+    return text.strip()
+
+
+_HEBREW_RE = re.compile(r"[\u0590-\u05FF]")
+
+
+def _detect_language(text: str) -> str | None:
+    """Simple heuristic language detection based on character ranges."""
+    # Count Hebrew characters vs Latin
+    hebrew_count = len(_HEBREW_RE.findall(text))
+    latin_count = sum(
+        1 for ch in text if unicodedata.category(ch).startswith("L") and ord(ch) < 0x0590
+    )
+
+    total = hebrew_count + latin_count
+    if total == 0:
+        return None
+    if hebrew_count / total > 0.3:
+        return "he"
+    if latin_count / total > 0.3:
+        return "en"
+    return None
 
 
 def _get_author(msg: Any) -> str | None:

@@ -1,1 +1,5 @@
 # Improvements
+
+## Functionality
+
+## UI/UX

@@ -7,6 +7,8 @@ import {
   deleteSource,
   getSourcePresets,
   testSource,
+  ingestSource,
+  searchTelegramChannels,
 } from '@/api/client';
 
 export function useSources() {
@@ -57,5 +59,25 @@ export function useDeleteSource() {
 export function useTestSource() {
   return useMutation({
     mutationFn: (data: SourceTestRequest) => testSource(data),
+  });
+}
+
+export function useIngestSource() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => ingestSource(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sources'] });
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+    },
+  });
+}
+
+export function useSearchTelegramChannels(query: string) {
+  return useQuery({
+    queryKey: ['telegramSearch', query],
+    queryFn: () => searchTelegramChannels(query),
+    enabled: query.trim().length >= 2,
+    staleTime: 30_000,
   });
 }

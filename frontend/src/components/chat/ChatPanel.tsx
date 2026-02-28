@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Send } from 'lucide-react';
+import { Send, MessageSquare, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -9,6 +9,7 @@ import { useSendMessage } from '@/hooks/useChat';
 import type { ChatMessage } from '@/types';
 
 export function ChatPanel() {
+  const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState('');
   const [conversationId, setConversationId] = useState<string | null>(null);
@@ -41,12 +42,11 @@ export function ChatPanel() {
       {
         onSuccess: (response) => {
           setMessages((prev) => [...prev, response]);
-          // If the response contains a conversation context, keep it for follow-ups
           if (!conversationId) {
             setConversationId(response.id);
           }
         },
-      }
+      },
     );
   };
 
@@ -57,14 +57,43 @@ export function ChatPanel() {
     }
   };
 
+  if (!open) {
+    return (
+      <Button
+        onClick={() => setOpen(true)}
+        className="fixed bottom-6 right-6 z-40 size-12 rounded-full shadow-lg"
+        size="icon"
+      >
+        <MessageSquare className="size-5" />
+      </Button>
+    );
+  }
+
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="fixed bottom-6 right-6 z-40 flex h-[28rem] w-96 flex-col overflow-hidden rounded-xl border bg-card shadow-2xl">
+      {/* Header */}
+      <div className="flex items-center justify-between border-b px-4 py-3">
+        <div className="flex items-center gap-2">
+          <MessageSquare className="size-4 text-primary" />
+          <span className="text-sm font-semibold">News Copilot</span>
+        </div>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="size-7"
+          onClick={() => setOpen(false)}
+        >
+          <X className="size-4" />
+        </Button>
+      </div>
+
+      {/* Messages */}
       <ScrollArea className="flex-1 px-4" ref={scrollRef}>
-        <div className="space-y-4 py-4">
+        <div className="space-y-3 py-4">
           {messages.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+            <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
               <p className="text-sm">
-                Ask a question about the news articles.
+                Ask questions about the news articles.
               </p>
             </div>
           )}
@@ -73,10 +102,10 @@ export function ChatPanel() {
               key={msg.id}
               className={cn(
                 'flex flex-col gap-1',
-                msg.role === 'user' ? 'items-end' : 'items-start'
+                msg.role === 'user' ? 'items-end' : 'items-start',
               )}
             >
-              <span className="text-xs text-muted-foreground">
+              <span className="text-[11px] text-muted-foreground">
                 {msg.role === 'user' ? 'You' : 'Assistant'}
               </span>
               <div
@@ -84,7 +113,7 @@ export function ChatPanel() {
                   'max-w-[85%] rounded-lg px-3 py-2 text-sm',
                   msg.role === 'user'
                     ? 'bg-primary text-primary-foreground'
-                    : 'bg-muted'
+                    : 'bg-muted',
                 )}
               >
                 <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -110,14 +139,15 @@ export function ChatPanel() {
         </div>
       </ScrollArea>
 
-      <div className="border-t p-4">
+      {/* Input */}
+      <div className="border-t p-3">
         <div className="flex gap-2">
           <Textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Ask about the news..."
-            className="min-h-[40px] max-h-[120px] resize-none"
+            className="min-h-[40px] max-h-[80px] resize-none text-sm"
             rows={1}
           />
           <Button

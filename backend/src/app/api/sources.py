@@ -1,11 +1,14 @@
+import asyncio
 from uuid import UUID
 
-import httpx
 from fastapi import APIRouter, Depends, HTTPException
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.db import get_db
+from app.db.session import async_session_factory
 from app.models.source import Source
 from app.schemas.source import (
     SourceCreate,
@@ -15,100 +18,17 @@ from app.schemas.source import (
     SourceTestResponse,
     SourceUpdate,
 )
+from app.services.ingestion import ingest_source
 
 router = APIRouter(tags=["sources"])
+
+# Set to prevent background tasks from being garbage-collected
+_ingest_tasks: set[asyncio.Task] = set()
 
 # ---------------------------------------------------------------------------
 # Preset source configurations
 # ---------------------------------------------------------------------------
 _PRESETS: list[SourcePreset] = [
-    # Israeli sources
-    SourcePreset(
-        name="Ynet",
-        source_type="rss",
-        config={"url": "https://www.ynet.co.il/Integration/StoryRss2.xml"},
-        category="israeli",
-        description="Ynet – Israel's most-visited news site (Hebrew)",
-    ),
-    SourcePreset(
-        name="Walla! News",
-        source_type="rss",
-        config={"url": "https://rss.walla.co.il/feed/1"},
-        category="israeli",
-        description="Walla! News – major Israeli news portal (Hebrew)",
-    ),
-    SourcePreset(
-        name="Mako / N12",
-        source_type="rss",
-        config={"url": "https://rcs.mako.co.il/rss/31750a2610f26110VgnVCM1000004801000aRCRD.xml"},
-        category="israeli",
-        description="Mako / Channel 12 News (Hebrew)",
-    ),
-    SourcePreset(
-        name="Kan News",
-        source_type="rss",
-        config={"url": "https://www.kan.org.il/Rss/"},
-        category="israeli",
-        description="Kan – Israeli public broadcasting news (Hebrew)",
-    ),
-    SourcePreset(
-        name="Israel Hayom",
-        source_type="rss",
-        config={"url": "https://www.israelhayom.co.il/rss.xml"},
-        category="israeli",
-        description="Israel Hayom – widely-circulated Israeli daily (Hebrew)",
-    ),
-    SourcePreset(
-        name="Haaretz English",
-        source_type="rss",
-        config={"url": "https://www.haaretz.com/cmlink/1.628765"},
-        category="israeli",
-        description="Haaretz – English edition of the Israeli newspaper",
-    ),
-    SourcePreset(
-        name="Times of Israel",
-        source_type="rss",
-        config={"url": "https://www.timesofisrael.com/feed/"},
-        category="israeli",
-        description="Times of Israel – English-language Israeli online newspaper",
-    ),
-    # Foreign / international sources
-    SourcePreset(
-        name="Fox News",
-        source_type="rss",
-        config={"url": "https://moxie.foxnews.com/google-publisher/latest.xml"},
-        category="foreign",
-        description="Fox News – latest headlines",
-    ),
-    SourcePreset(
-        name="CNBC",
-        source_type="rss",
-        config={"url": "https://www.cnbc.com/id/100003114/device/rss/rss.html"},
-        category="foreign",
-        description="CNBC – top news and analysis",
-    ),
-    SourcePreset(
-        name="BBC News",
-        source_type="rss",
-        config={"url": "https://feeds.bbci.co.uk/news/rss.xml"},
-        category="foreign",
-        description="BBC News – world news from the BBC",
-    ),
-    SourcePreset(
-        name="Reuters",
-        source_type="rss",
-        config={"url": "https://www.reutersagency.com/feed/?taxonomy=best-sectors&post_type=best"},
-        category="foreign",
-        description="Reuters – international news wire",
-    ),
-    SourcePreset(
-        name="AP News",
-        source_type="rss",
-        config={"url": "https://feedx.net/rss/ap.xml"},
-        category="foreign",
-        description="Associated Press – global news",
-    ),
-    # Telegram channels
     SourcePreset(
         name="Abu Ali Express",
         source_type="telegram",
@@ -130,6 +50,34 @@ _PRESETS: list[SourcePreset] = [
         category="telegram",
         description="חדשות 301 העולם הערבי – Arab world news and analysis (Hebrew)",
     ),
+    SourcePreset(
+        name="Rotter HaMadlif",
+        source_type="telegram",
+        config={"channel": "rotter_HaMadlif"},
+        category="telegram",
+        description="רוטר המדליף – breaking news leaks and updates (Hebrew)",
+    ),
+    SourcePreset(
+        name="MyGPLANET",
+        source_type="telegram",
+        config={"channel": "MyGPLANET"},
+        category="telegram",
+        description="MyGPLANET – geopolitical news and analysis",
+    ),
+    SourcePreset(
+        name="Saleh Desk",
+        source_type="telegram",
+        config={"channel": "salehdesk1"},
+        category="telegram",
+        description="סאלח דסק – security and military news (Hebrew/Arabic)",
+    ),
+    SourcePreset(
+        name="Yinon News",
+        source_type="telegram",
+        config={"channel": "yinonews"},
+        category="telegram",
+        description="ינון מגזין – news and current affairs (Hebrew)",
+    ),
 ]
 
 
@@ -148,7 +96,7 @@ async def create_source(
     body: SourceCreate,
     db: AsyncSession = Depends(get_db),
 ) -> SourceResponse:
-    """Create a new news source."""
+    """Create a new news source and kick off initial ingestion."""
     # Check for duplicate name
     existing = await db.execute(select(Source).where(Source.name == body.name))
     if existing.scalar_one_or_none() is not None:
@@ -158,7 +106,16 @@ async def create_source(
     db.add(source)
     await db.flush()
     await db.refresh(source)
-    return SourceResponse.model_validate(source)
+
+    response = SourceResponse.model_validate(source)
+
+    # Fire-and-forget background ingestion (uses its own DB session)
+    source_id = source.id
+    task = asyncio.create_task(_background_ingest(source_id))
+    _ingest_tasks.add(task)
+    task.add_done_callback(_ingest_tasks.discard)
+
+    return response
 
 
 @router.get("/presets", response_model=list[SourcePreset])
@@ -216,10 +173,7 @@ async def delete_source(
 
 @router.post("/test", response_model=SourceTestResponse)
 async def test_source(body: SourceTestRequest) -> SourceTestResponse:
-    """Test a source configuration (fetch and parse)."""
-    if body.source_type == "rss":
-        return await _test_rss_source(body.config)
-
+    """Test a source configuration."""
     if body.source_type == "telegram":
         return SourceTestResponse(
             success=False,
@@ -234,59 +188,93 @@ async def test_source(body: SourceTestRequest) -> SourceTestResponse:
 
 
 @router.get("/telegram/search")
-async def search_telegram_channels() -> dict[str, str]:
-    """Search Telegram channels (placeholder)."""
-    return {
-        "message": "Telegram channel search requires Telegram API credentials "
-        "(api_id and api_hash). This feature will be available once "
-        "credentials are configured in the application settings."
-    }
+async def search_telegram_channels(
+    query: str = "",
+    limit: int = 20,
+) -> list[dict]:
+    """Search Telegram channels by keyword.
+
+    Returns a list of channel dicts with ``id``, ``title``, ``username``,
+    and ``participants_count``.  If Telegram credentials are not configured
+    the endpoint returns the presets that match the query instead.
+    """
+    settings = get_settings()
+
+    if not query.strip():
+        return []
+
+    # If credentials are available, do a live Telegram search
+    if settings.telegram_api_id and settings.telegram_api_hash:
+        from app.ingestors.telegram import search_channels
+        from app.services.telegram_client import get_telegram_client
+
+        try:
+            client = await get_telegram_client()
+            results = await search_channels(client, query, limit=limit)
+            return results
+        except Exception:
+            logger.exception("Telegram channel search failed")
+            raise HTTPException(
+                status_code=502,
+                detail="Telegram channel search failed. Check credentials.",
+            ) from None
+
+    # Fallback: search presets by name/description
+    q = query.lower()
+    return [
+        {
+            "id": None,
+            "title": p.name,
+            "username": p.config.get("channel"),
+            "participants_count": None,
+        }
+        for p in _PRESETS
+        if q in p.name.lower() or q in (p.description or "").lower()
+    ]
+
+
+@router.post("/{source_id}/ingest")
+async def trigger_ingest(
+    source_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, str | int]:
+    """Manually trigger ingestion for a specific source."""
+    result = await db.execute(select(Source).where(Source.id == source_id))
+    source = result.scalar_one_or_none()
+    if source is None:
+        raise HTTPException(status_code=404, detail="Source not found")
+
+    try:
+        count = await ingest_source(source, db)
+    except Exception as exc:
+        logger.exception("Ingestion failed for source {}", source.name)
+        raise HTTPException(status_code=500, detail=str(exc)) from None
+    return {"source": source.name, "new_articles": count}
 
 
 # ---------------------------------------------------------------------------
-# Helpers
+# Background ingestion helper
 # ---------------------------------------------------------------------------
 
 
-async def _test_rss_source(config: dict) -> SourceTestResponse:
-    """Attempt to fetch and parse an RSS feed, returning sample items."""
-    url = config.get("url")
-    if not url:
-        return SourceTestResponse(success=False, message="Missing 'url' in config")
+async def _background_ingest(source_id: UUID) -> None:
+    """Run ingestion in background with its own DB session.
 
+    This is spawned via ``asyncio.create_task`` so it runs concurrently
+    without blocking the API response.
+    """
     try:
-        async with httpx.AsyncClient(timeout=15, follow_redirects=True) as client:
-            resp = await client.get(url, headers={"User-Agent": "NewsDashboard/0.1"})
-            resp.raise_for_status()
-    except httpx.HTTPError as exc:
-        return SourceTestResponse(
-            success=False,
-            message=f"Failed to fetch RSS feed: {exc}",
-        )
-
-    # Attempt a lightweight parse with the built-in xml parser
-    import xml.etree.ElementTree as ET
-
-    try:
-        root = ET.fromstring(resp.text)
-    except ET.ParseError as exc:
-        return SourceTestResponse(
-            success=False,
-            message=f"Failed to parse RSS XML: {exc}",
-        )
-
-    # Extract sample <item> elements (RSS 2.0) or <entry> (Atom)
-    items: list[dict] = []
-    ns = {"atom": "http://www.w3.org/2005/Atom"}
-    rss_items = root.findall(".//item") or root.findall(".//atom:entry", ns)
-    for item in rss_items[:5]:
-        title = item.findtext("title") or item.findtext("atom:title", namespaces=ns) or ""
-        link = item.findtext("link") or item.findtext("atom:link", namespaces=ns) or ""
-        pub_date = item.findtext("pubDate") or item.findtext("atom:published", namespaces=ns) or ""
-        items.append({"title": title.strip(), "link": link.strip(), "pubDate": pub_date.strip()})
-
-    return SourceTestResponse(
-        success=True,
-        message=f"Successfully fetched and parsed RSS feed – found {len(rss_items)} item(s).",
-        sample_items=items,
-    )
+        async with async_session_factory() as db, db.begin():
+            result = await db.execute(select(Source).where(Source.id == source_id))
+            source = result.scalar_one_or_none()
+            if source is None:
+                logger.warning("Background ingest: source {} not found", source_id)
+                return
+            count = await ingest_source(source, db)
+            logger.info(
+                "Background ingest complete for {}: {} new articles",
+                source.name,
+                count,
+            )
+    except Exception:
+        logger.exception("Background ingestion failed for source {}", source_id)

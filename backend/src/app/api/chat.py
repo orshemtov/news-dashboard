@@ -1,6 +1,7 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
+from loguru import logger
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -13,6 +14,7 @@ from app.schemas.chat import (
     ConversationListResponse,
     ConversationResponse,
 )
+from app.services.chat import ChatService
 
 router = APIRouter(tags=["chat"])
 
@@ -51,17 +53,23 @@ async def send_message(
     db.add(user_msg)
     await db.flush()
 
-    # Placeholder assistant reply
+    # Generate assistant reply via RAG pipeline
+    chat_service = ChatService(db)
+    try:
+        response_text, cited_ids = await chat_service.chat(
+            body.message, conversation_id=conversation.id
+        )
+    except Exception as exc:
+        logger.error("Chat service error: {}", exc)
+        response_text = "Sorry, I encountered an error generating a response. Please try again."
+        cited_ids = []
+
     assistant_msg = ChatMessage(
         conversation_id=conversation.id,
         role="assistant",
-        content=(
-            "AI chat will be implemented with pydantic-ai. "
-            "Once configured, I will be able to answer questions about "
-            "your ingested news articles, summarize content, and more."
-        ),
-        model_used="placeholder",
-        cited_article_ids=[],
+        content=response_text,
+        model_used=chat_service._get_model_name(),
+        cited_article_ids=cited_ids,
     )
     db.add(assistant_msg)
     await db.flush()
