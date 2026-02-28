@@ -1,6 +1,6 @@
 # News Dashboard
 
-A full-stack news aggregator dashboard with AI-powered search, summarization, and chat. Collects articles from RSS feeds and Telegram channels, deduplicates them using semantic similarity, and provides hybrid search (keyword + vector) with a RAG-based conversational interface.
+A full-stack news aggregator dashboard with AI-powered search and chat. Collects articles from Telegram channels, deduplicates them using semantic similarity, and provides hybrid search (keyword + vector) with a RAG-based conversational interface.
 
 | Light | Dark |
 |-------|------|
@@ -10,57 +10,37 @@ A full-stack news aggregator dashboard with AI-powered search, summarization, an
 
 ### Article Feed
 
-The main page displays articles as cards with title, content preview, source badge, relative timestamp, and language tag. Clicking a card opens a detail dialog with the full content, source link, and summary (if available).
+Articles displayed as cards with title, preview, source badge, timestamp, and language tag. Click to open full content with source link.
 
-- **Time range filtering** -- Datadog-style presets (1m, 5m, 15m, 1h, 4h, 12h, 1d, 3d, 7d, 30d, All)
-- **Auto-refresh** -- configurable intervals (5s, 10s, 30s, 1m, 5m, Off), default 10s
-- **Sort order** -- toggle between newest and oldest first
-- **Hide duplicates** -- filter out semantically duplicate articles
-- **Pagination** -- 20 articles per page with total count
-- **RTL support** -- automatic right-to-left layout for Hebrew, Arabic, Farsi, and Urdu content
-- **Stats bar** -- total articles, articles today, active sources, last ingestion time
+- **Time range filtering** -- quick presets from 1 minute to all time
+- **Auto-refresh** -- configurable interval, default 10s
+- **Sort, dedup, pagination** -- newest/oldest, hide duplicates, 20 per page
+- **RTL support** -- automatic right-to-left layout for Hebrew, Arabic, Farsi, Urdu
+- **Stats bar** -- article counts, active sources, last ingestion time
 
 ### Search
 
-Search is integrated directly into the feed with three modes:
+Integrated into the feed with three modes:
 
-- **Keyword** -- PostgreSQL full-text search with `plainto_tsquery` and `ts_rank` ranking
-- **Semantic** -- vector similarity search using pgvector cosine distance
-- **Hybrid** -- runs both keyword and semantic, merges results with Reciprocal Rank Fusion (RRF, k=60)
-
-All modes support filtering by source, source type, language, and date range.
+- **Keyword** -- PostgreSQL full-text search
+- **Semantic** -- pgvector cosine similarity
+- **Hybrid** -- combines both using Reciprocal Rank Fusion (RRF)
 
 ### Source Management
 
-Add, enable/disable, and delete news sources. Articles begin ingesting immediately when a source is added.
-
-- **Telegram channel search** -- live search via Telegram API, with fallback to built-in presets
-- **Preset sources** -- curated list of news channels available out of the box
-- **Status tracking** -- active/disabled/error states with error message display
-- **Article counts** and last-polled timestamps per source
+Add, enable/disable, and delete Telegram channels. Articles begin ingesting immediately when a source is added. Includes live channel search via Telegram API and built-in presets.
 
 ![Sources](docs/sources-dark.png)
 
 ### AI Chat (News Copilot)
 
-A floating chat panel in the bottom-right corner provides RAG-based conversational Q&A:
-
-1. Your message is used as a hybrid search query to retrieve the top 10 relevant articles
-2. Articles are formatted as numbered context and sent to the LLM
-3. The model answers based only on retrieved articles, citing sources with `[1]`, `[2]` notation
-4. Citations are displayed as clickable badges below the response
-
-Supports multi-turn conversations with persistence. Works with Ollama (local) or OpenAI.
-
-### AI Summarization and Translation
-
-Backend services for article summarization (2-4 sentence summaries) and translation to any target language, powered by the configured LLM provider.
+Floating chat panel with RAG-based Q&A over your articles. Uses hybrid search to find relevant articles, sends them as context to the LLM, and returns answers with numbered `[1]`, `[2]` citations. Multi-turn conversations with persistence. Works with Ollama (local) or OpenAI.
 
 ### Other
 
-- **Dark mode** -- toggle via header button
-- **Responsive layout** -- mobile-friendly with sticky header and backdrop blur
-- **Telegram content cleaning** -- strips markdown formatting, bare URLs, and navigation elements
+- **Dark mode** toggle
+- **Responsive layout** with sticky header
+- **Telegram content cleaning** -- strips formatting artifacts
 
 ## Tech Stack
 
@@ -167,7 +147,7 @@ TELEGRAM_API_HASH=your_api_hash
 | `TELEGRAM_POLL_INTERVAL_SECONDS` | `60` | Telegram polling interval |
 | `INITIAL_BACKFILL_HOURS` | `24` | Hours of history to backfill on first run |
 | `POLLING_ENABLED` | `true` | Enable/disable source polling |
-| `POLLING_INTERVAL_SECONDS` | `300` | RSS polling interval |
+| `POLLING_INTERVAL_SECONDS` | `300` | Source polling interval |
 
 ## Usage
 
@@ -202,7 +182,7 @@ mise run serve
 
 1. Open the frontend at http://localhost:5173
 2. Navigate to **Sources**
-3. Add an RSS feed URL or Telegram channel
+3. Add a Telegram channel
 4. Articles will begin ingesting automatically
 
 ### Database migrations
@@ -240,7 +220,7 @@ news-dashboard/
 │       ├── models/       # SQLAlchemy ORM models
 │       ├── schemas/      # Pydantic request/response schemas
 │       ├── services/     # Business logic (AI, search, embedding, dedup, ingestion)
-│       ├── ingestors/    # Data source adapters (RSS, Telegram)
+│       ├── ingestors/    # Data source adapters (Telegram)
 │       ├── workers/      # Kafka consumer worker
 │       └── db/           # Async database session factory
 ├── frontend/
@@ -257,7 +237,7 @@ news-dashboard/
 ## Architecture
 
 ```
-RSS / Telegram
+Telegram Channels
       │
       ▼
   Ingestors ──▶ Kafka (raw-articles) ──▶ Consumer Worker
@@ -277,6 +257,39 @@ RSS / Telegram
                                               ▼
                                     React Frontend
 ```
+
+### Ingestion Pipeline
+
+Two parallel ingestion paths are available:
+
+**Direct polling (default)** -- A background task polls all enabled sources on a configurable interval (default: 5 minutes). New sources are ingested immediately on creation via a fire-and-forget background task. Articles are deduplicated by content hash, embedded in batch, and stored directly to PostgreSQL.
+
+**Kafka consumer (alternative)** -- Ingestors publish to `raw-articles`, a consumer worker processes each message (embed + dedup), publishes to `enriched-articles`, and stores to the database. Consumer group: `news-dashboard-workers`.
+
+### Deduplication
+
+Two-tier system to catch both exact and near-duplicate articles:
+
+1. **Exact hash** -- SHA-256 of normalized (lowercased, trimmed) content. Checked before insertion; exact duplicates are silently skipped.
+2. **Semantic similarity** -- pgvector cosine distance against articles within a configurable time window (default: 24h). Articles above the similarity threshold (default: 0.92) are stored but marked as `is_duplicate=true` and assigned to a `dedup_cluster_id`.
+
+### Hybrid Search (RRF)
+
+Search runs keyword and semantic queries in parallel, then merges results using Reciprocal Rank Fusion:
+
+- **Keyword** -- PostgreSQL full-text search with `plainto_tsquery("simple", ...)` and `ts_rank` scoring. The `simple` config handles multilingual content (Hebrew, Arabic, English).
+- **Semantic** -- generates a query embedding, finds nearest neighbors via pgvector cosine distance (`<=>`).
+- **Fusion** -- `RRF_score = sum(1 / (k + rank))` across both result lists (k=60). Articles appearing in both lists get boosted scores. Pagination is applied after fusion.
+
+### RAG Chat
+
+1. User message is used as a hybrid search query (top 10 articles, duplicates excluded)
+2. Articles are formatted as numbered context blocks (first 1500 chars each)
+3. Context + question are sent to the LLM with a system prompt enforcing citation-based answers
+4. Response is parsed for `[N]` citation markers and mapped back to article IDs
+5. Conversations and messages are persisted to the database
+
+Uses pydantic-ai for LLM orchestration. Supports Ollama (local) or OpenAI.
 
 ## License
 
