@@ -30,10 +30,8 @@ backend/tests/
 │   ├── test_search.py
 │   ├── test_stats.py
 │   ├── test_ai.py
-│   └── test_chat.py
 ├── services/
 │   ├── test_ai.py
-│   ├── test_chat.py
 │   ├── test_search.py
 │   ├── test_embedding.py
 │   ├── test_dedup.py
@@ -135,7 +133,7 @@ def article_factory(db_session):
 ## What to test
 
 - **API endpoints**: Status codes, response schemas, filtering, pagination, error cases
-- **Services**: Business logic (search ranking, dedup thresholds, chat RAG pipeline)
+- **Services**: Business logic (search ranking, dedup thresholds, AI summarization)
 - **Ingestors**: RSS parsing (use fixture XML), Telegram message transformation
 
 ## What NOT to mock

@@ -5,12 +5,6 @@ from app.schemas.article import (
     ArticleListResponse,
     ArticleResponse,
 )
-from app.schemas.chat import (
-    ChatMessageRequest,
-    ChatMessageResponse,
-    ConversationListResponse,
-    ConversationResponse,
-)
 from app.schemas.search import SearchRequest, SearchResponse
 from app.schemas.source import (
     SourceBase,
@@ -29,10 +23,6 @@ __all__ = [
     "ArticleDetail",
     "ArticleListResponse",
     "ArticleResponse",
-    "ChatMessageRequest",
-    "ChatMessageResponse",
-    "ConversationListResponse",
-    "ConversationResponse",
     "DashboardStats",
     "SearchRequest",
     "SearchResponse",

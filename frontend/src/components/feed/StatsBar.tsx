@@ -1,5 +1,5 @@
 import { useStats } from '@/hooks/useStats';
-import { Newspaper, CalendarDays, Radio } from 'lucide-react';
+import { Activity, CalendarDays, Radio } from 'lucide-react';
 
 export function StatsBar() {
   const { data: stats } = useStats();
@@ -10,7 +10,7 @@ export function StatsBar() {
     {
       label: 'Articles',
       value: stats.total_articles.toLocaleString(),
-      icon: Newspaper,
+      icon: Activity,
     },
     {
       label: 'Today',
@@ -25,22 +25,21 @@ export function StatsBar() {
   ];
 
   return (
-    <div className="flex items-center gap-4 rounded-lg border border-border/50 bg-card px-4 py-2.5">
+    <div className="flex items-center gap-4 text-sm">
       {items.map((item, i) => (
-        <div key={item.label} className="flex items-center gap-3">
-          {i > 0 && <div className="h-4 w-px bg-border" />}
-          <div className="flex items-center gap-2">
-            <item.icon className="size-3.5 text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">{item.label}</span>
-            <span className="text-sm font-semibold">{item.value}</span>
+        <div key={item.label} className="flex items-center gap-2">
+          {i > 0 && <div className="h-3 w-px bg-border/50" />}
+          <div className="flex items-center gap-1.5">
+            <item.icon className="size-3 text-primary/60" />
+            <span className="text-muted-foreground/70 text-xs">{item.label}</span>
+            <span className="text-xs font-medium">{item.value}</span>
           </div>
         </div>
       ))}
       {stats.latest_ingestion && (
         <>
-          <div className="h-4 w-px bg-border" />
-          <span className="text-xs text-muted-foreground">
-            Last ingest:{' '}
+          <div className="h-3 w-px bg-border/50" />
+          <span className="text-[11px] text-muted-foreground/50">
             {new Date(stats.latest_ingestion).toLocaleTimeString()}
           </span>
         </>

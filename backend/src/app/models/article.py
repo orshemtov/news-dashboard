@@ -40,6 +40,9 @@ class Article(TimestampMixin, Base):
     metadata_: Mapped[dict[str, Any]] = mapped_column(
         "metadata", JSONB, nullable=False, default=dict
     )
+    media_attachments: Mapped[list[dict[str, Any]]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
     embedding: Mapped[list[float] | None] = mapped_column(Vector(384), nullable=True)
     dedup_hash: Mapped[str] = mapped_column(String, nullable=False)
     dedup_cluster_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)

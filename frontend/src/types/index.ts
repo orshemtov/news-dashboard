@@ -1,4 +1,19 @@
 // ---------------------------------------------------------------------------
+// Media
+// ---------------------------------------------------------------------------
+
+export interface MediaAttachment {
+  type: 'photo' | 'video';
+  url: string;
+  thumbnail_url: string | null;
+  mime_type: string | null;
+  file_size: number | null;
+  width: number | null;
+  height: number | null;
+  duration: number | null; // seconds, for video
+}
+
+// ---------------------------------------------------------------------------
 // Article
 // ---------------------------------------------------------------------------
 
@@ -17,6 +32,7 @@ export interface Article {
   is_duplicate: boolean;
   dedup_cluster_id: string | null;
   metadata_: Record<string, unknown>;
+  media_attachments: MediaAttachment[];
 }
 
 export interface ArticleDetail extends Article {
@@ -105,50 +121,6 @@ export interface SearchResponse {
   total: number;
   query: string;
   mode: string;
-}
-
-// ---------------------------------------------------------------------------
-// Chat
-// ---------------------------------------------------------------------------
-
-export interface ChatMessageRequest {
-  message: string;
-  conversation_id?: string;
-  provider?: string;
-  model?: string;
-}
-
-export interface ChatMessage {
-  id: string;
-  role: string;
-  content: string;
-  cited_article_ids: string[];
-  model_used: string | null;
-  created_at: string;
-}
-
-export interface Conversation {
-  id: string;
-  title: string | null;
-  created_at: string;
-  updated_at: string;
-  messages: ChatMessage[];
-}
-
-export interface ConversationListResponse {
-  items: Conversation[];
-}
-
-export interface ChatProvider {
-  id: string;
-  name: string;
-  models: string[];
-}
-
-export interface ChatConfig {
-  default_provider: string;
-  default_model: string;
-  providers: ChatProvider[];
 }
 
 // ---------------------------------------------------------------------------

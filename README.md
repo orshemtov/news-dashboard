@@ -1,6 +1,6 @@
 # News Dashboard
 
-A full-stack news aggregator dashboard with AI-powered search and chat. Collects articles from Telegram channels, deduplicates them using semantic similarity, and provides hybrid search (keyword + vector) with a RAG-based conversational interface.
+A full-stack news aggregator dashboard with AI-powered search. Collects articles from Telegram channels, deduplicates them using semantic similarity, and provides hybrid search (keyword + vector).
 
 | Light | Dark |
 |-------|------|
@@ -31,10 +31,6 @@ Integrated into the feed with three modes:
 Add, enable/disable, and delete Telegram channels. Articles begin ingesting immediately when a source is added. Includes live channel search via Telegram API and built-in presets.
 
 ![Sources](docs/sources-dark.png)
-
-### AI Chat (News Copilot)
-
-Floating chat panel with RAG-based Q&A over your articles. Uses hybrid search to find relevant articles, sends them as context to the LLM, and returns answers with numbered `[1]`, `[2]` citations. Multi-turn conversations with persistence. Works with Ollama (local) or OpenAI.
 
 ### Other
 
@@ -221,7 +217,7 @@ news-dashboard/
 │   └── src/
 │       ├── api/          # Axios API client
 │       ├── hooks/        # React Query hooks + SSE article stream
-│       ├── pages/        # Route pages (Feed, Search, Sources, Stats, Chat)
+│       ├── pages/        # Route pages (Feed, Sources)
 │       ├── components/   # UI components organized by feature
 │       └── types/        # TypeScript interfaces
 ├── docker-compose.yml    # PostgreSQL, Ollama, pgweb
@@ -276,14 +272,6 @@ Search runs keyword and semantic queries in parallel, then merges results using 
 - **Keyword** -- PostgreSQL full-text search with `plainto_tsquery("simple", ...)` and `ts_rank` scoring. The `simple` config handles multilingual content (Hebrew, Arabic, English).
 - **Semantic** -- generates a query embedding, finds nearest neighbors via pgvector cosine distance (`<=>`).
 - **Fusion** -- `RRF_score = sum(1 / (k + rank))` across both result lists (k=60). Articles appearing in both lists get boosted scores. Pagination is applied after fusion.
-
-### RAG Chat
-
-1. User message is used as a hybrid search query (top 10 articles, duplicates excluded)
-2. Articles are formatted as numbered context blocks (first 1500 chars each)
-3. Context + question are sent to the LLM with a system prompt enforcing citation-based answers
-4. Response is parsed for `[N]` citation markers and mapped back to article IDs
-5. Conversations and messages are persisted to the database
 
 Uses pydantic-ai for LLM orchestration. Supports Ollama (local) or OpenAI.
 

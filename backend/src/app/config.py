@@ -42,6 +42,11 @@ class Settings(BaseSettings):
     polling_enabled: bool = True
     polling_interval_seconds: int = 60
 
+    # Media storage
+    media_storage_path: str = "media"
+    media_max_file_size_mb: int = 50
+    media_download_enabled: bool = True
+
 
 @lru_cache
 def get_settings() -> Settings:

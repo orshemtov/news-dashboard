@@ -22,7 +22,7 @@ _ROUTERS: list[tuple[str, str, str]] = [
     ("app.api.sources", "/api/sources", "sources"),
     ("app.api.search", "/api/search", "search"),
     ("app.api.stats", "/api/stats", "stats"),
-    ("app.api.chat", "/api/chat", "chat"),
+    ("app.api.media", "/api/media", "media"),
 ]
 
 

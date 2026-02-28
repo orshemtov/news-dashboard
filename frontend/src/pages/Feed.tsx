@@ -11,7 +11,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
-  Newspaper,
+  Activity,
   Plus,
   Search,
   X,
@@ -20,7 +20,6 @@ import {
 import { ArticleCard } from '@/components/feed/ArticleCard';
 import { ArticleDetailDialog } from '@/components/feed/ArticleDetailDialog';
 import { StatsBar } from '@/components/feed/StatsBar';
-import { ChatPanel } from '@/components/chat/ChatPanel';
 
 // ---------------------------------------------------------------------------
 // Time range presets (Datadog-style)
@@ -44,8 +43,8 @@ const TIME_RANGES = [
 type SortOption = 'newest' | 'oldest';
 
 export default function Feed() {
-  // SSE: auto-refresh when new articles arrive
-  useArticleStream();
+  // SSE: auto-update when new articles arrive
+  const { newIds, clearNewId } = useArticleStream();
 
   // Filters
   const [page, setPage] = useState(1);
@@ -133,20 +132,20 @@ export default function Feed() {
   const resetPage = () => setPage(1);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       {/* Stats Bar */}
       <StatsBar />
 
       {/* Search Bar */}
       <div className="flex gap-2">
         <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60" />
           <Input
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={handleSearchKeyDown}
             placeholder="Search articles..."
-            className="pl-9 pr-8"
+            className="border-border/40 bg-card pl-9 pr-8"
           />
           {searchQuery && (
             <button
@@ -192,65 +191,61 @@ export default function Feed() {
       )}
 
       {/* Filters */}
-      <div className="space-y-3 rounded-lg border border-border/40 bg-card/50 p-3">
-        {/* Row 1: Time Range */}
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-medium text-muted-foreground">Time</span>
-          <div className="flex rounded-md border border-input">
-            {TIME_RANGES.map((tr) => (
-              <button
-                key={tr.label}
-                onClick={() => {
-                  setTimeRange(tr.hours);
-                  localStorage.setItem('news-dashboard-time-range', String(tr.hours));
-                  resetPage();
-                }}
-                className={`px-2 py-1 text-xs font-medium transition-colors first:rounded-l-md last:rounded-r-md ${
-                  timeRange === tr.hours
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                }`}
-              >
-                {tr.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Row 2: Sort + Dedup + Count */}
-        <div className="flex flex-wrap items-center gap-3">
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() =>
-              setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest'))
-            }
-          >
-            <ArrowUpDown className="size-3" />
-            {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
-          </Button>
-
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={hideDuplicates}
-              onChange={(e) => {
-                setHideDuplicates(e.target.checked);
+      <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/30 bg-card/40 px-3 py-2">
+        <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">Time</span>
+        <div className="flex rounded-md border border-border/40">
+          {TIME_RANGES.map((tr) => (
+            <button
+              key={tr.label}
+              onClick={() => {
+                setTimeRange(tr.hours);
+                localStorage.setItem('news-dashboard-time-range', String(tr.hours));
                 resetPage();
               }}
-              className="rounded border-input"
-            />
-            Hide dupes
-          </label>
-
-          <span className="ml-auto text-xs text-muted-foreground">
-            {total} article{total !== 1 ? 's' : ''}
-            {isSearching && search.data
-              ? ` for "${search.data.query}" (${search.data.mode})`
-              : ''}
-          </span>
+              className={`px-2 py-1 text-xs font-medium transition-colors first:rounded-l-md last:rounded-r-md ${
+                timeRange === tr.hours
+                  ? 'bg-primary text-primary-foreground'
+                  : 'text-muted-foreground/70 hover:bg-accent hover:text-accent-foreground'
+              }`}
+            >
+              {tr.label}
+            </button>
+          ))}
         </div>
+
+        <div className="mx-1 h-4 w-px bg-border" />
+
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs"
+          onClick={() =>
+            setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest'))
+          }
+        >
+          <ArrowUpDown className="size-3" />
+          {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
+        </Button>
+
+        <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <input
+            type="checkbox"
+            checked={hideDuplicates}
+            onChange={(e) => {
+              setHideDuplicates(e.target.checked);
+              resetPage();
+            }}
+            className="rounded border-input"
+          />
+          Hide dupes
+        </label>
+
+        <span className="ml-auto text-xs text-muted-foreground">
+          {total} article{total !== 1 ? 's' : ''}
+          {isSearching && search.data
+            ? ` for "${search.data.query}" (${search.data.mode})`
+            : ''}
+        </span>
       </div>
 
       {/* Loading / Error */}
@@ -274,7 +269,7 @@ export default function Feed() {
         !isSearching && (
           <div className="flex flex-col items-center justify-center gap-4 py-16 text-center">
             <div className="rounded-full bg-muted p-4">
-              <Newspaper className="size-8 text-muted-foreground" />
+              <Activity className="size-8 text-muted-foreground" />
             </div>
             <div className="space-y-2">
               <h3 className="text-lg font-semibold">No articles yet</h3>
@@ -310,6 +305,8 @@ export default function Feed() {
             key={article.id}
             article={article}
             onClick={() => setSelectedArticle(article)}
+            isNew={newIds.has(article.id)}
+            onAnimationEnd={() => clearNewId(article.id)}
           />
         ))}
       </div>
@@ -347,8 +344,6 @@ export default function Feed() {
         onClose={() => setSelectedArticle(null)}
       />
 
-      {/* Floating Chat Panel */}
-      <ChatPanel />
     </div>
   );
 }

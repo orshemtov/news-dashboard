@@ -8,17 +8,17 @@ A full-stack news aggregator dashboard with AI capabilities.
 news-dashboard/
 ├── backend/            # Python 3.13, FastAPI, SQLAlchemy (async), Alembic
 │   └── src/app/
-│       ├── api/        # REST API routes (articles, sources, search, stats, ai, chat)
-│       ├── models/     # SQLAlchemy ORM models (article, source, chat)
+│       ├── api/        # REST API routes (articles, sources, search, stats, ai, media)
+│       ├── models/     # SQLAlchemy ORM models (article, source)
 │       ├── schemas/    # Pydantic request/response schemas
-│       ├── services/   # Business logic (ai, chat, search, embedding, dedup, ingestion, events, telegram_listener)
+│       ├── services/   # Business logic (ai, search, embedding, dedup, ingestion, events, telegram_listener)
 │       ├── ingestors/  # Data source adapters (telegram)
 │       └── db/         # Async database session factory
 ├── frontend/           # React 19, TypeScript, Vite 7, Tailwind CSS 4, shadcn/ui
 │   └── src/
 │       ├── api/        # Axios API client
 │       ├── hooks/      # React Query hooks + SSE article stream
-│       ├── pages/      # Route pages (Feed, Search, Sources, Stats, Chat)
+│       ├── pages/      # Route pages (Feed, Sources)
 │       ├── components/ # UI components organized by feature
 │       └── types/      # TypeScript interfaces
 ├── docker-compose.yml  # PostgreSQL 16 (pgvector), Ollama
@@ -50,14 +50,12 @@ All routes are prefixed with `/api`:
 | `/api/search` | Keyword, semantic, and hybrid (RRF) search |
 | `/api/stats` | Dashboard statistics |
 | `/api/ai` | Summarize and translate articles |
-| `/api/chat` | RAG conversational chat with article citations |
 | `/api/health` | Health check |
 
 ## Database Models
 
 - `articles` -- news articles with pgvector embeddings (Vector(384)), dedup_hash, JSONB metadata, GIN indexes
 - `sources` -- RSS/Telegram source configurations with polling metadata
-- `chat_conversations` + `chat_messages` -- chat history with article citations
 
 ## Coding Standards
 
@@ -120,7 +118,6 @@ mise run lint           # Lint frontend code
 
 - **Dedup**: Two-tier deduplication -- exact hash matching + semantic similarity (0.92 cosine threshold, 24h window)
 - **Search**: Hybrid search using Reciprocal Rank Fusion (RRF) combining keyword (GIN/tsvector) and semantic (pgvector cosine) search
-- **RAG Chat**: Hybrid search retrieves relevant articles, LLM generates answers with numbered citations
 - **Ingestion Pipeline**: Telegram listener (real-time) + polling (fallback) -> embed + dedup -> PostgreSQL, SSE push to frontend
 
 ## When using MCP tools

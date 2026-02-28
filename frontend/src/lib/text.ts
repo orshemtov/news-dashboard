@@ -66,31 +66,46 @@ export function startsWithRtl(text: string): boolean {
 export function cleanContent(raw: string): string {
   let text = raw;
 
-  // 1. Remove empty/whitespace-only markdown links: [ ](url)
+  // 1. Remove zero-width and invisible Unicode characters
+  // eslint-disable-next-line no-control-regex
+  text = text.replace(/[\u200B\u200C\u200D\u200E\u200F\uFEFF\u2060-\u2064\u2066-\u2069\u202A-\u202E]/g, '');
+
+  // 2. Remove empty/whitespace-only markdown links: [ ](url)
   text = text.replace(/\[\s*\]\([^)]*\)/g, '');
 
-  // 2. Convert markdown links to just the text: [visible text](url) → visible text
+  // 3. Convert markdown links to just the text: [visible text](url) → visible text
   text = text.replace(/\[([^\]]+)\]\([^)]*\)/g, '$1');
 
-  // 3. Remove markdown bold: **text** → text
+  // 4. Remove markdown bold: **text** → text
   text = text.replace(/\*\*([^*]+)\*\*/g, '$1');
 
-  // 4. Remove markdown italic: __text__ → text
+  // 5. Remove markdown italic: __text__ → text
   text = text.replace(/__([^_]+)__/g, '$1');
 
-  // 5. Remove remaining markdown emphasis: *text* → text (single asterisk)
+  // 6. Remove remaining markdown emphasis: *text* → text (single asterisk)
   text = text.replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1');
 
-  // 6. Remove bare URLs (https://... or http://...)
+  // 7. Remove bare URLs (https://... or http://...)
   text = text.replace(/https?:\/\/\S+/g, '');
 
-  // 7. Remove common Telegram navigation/promo lines (Hebrew)
-  // "לקריאה נוחה במחשב" / "לקריאת נוחה בנייד" / "הצטרפו לערוץ" etc.
+  // 8. Remove Telegram navigation/promo emojis and lines (Hebrew)
   text = text.replace(/[👈🏽👉🏽⬇️⬆️➡️⬅️🔗📢📌]+/g, '');
   text = text.replace(/לקריאה?\s+נוחה?\s+(במחשב|בנייד)/g, '');
   text = text.replace(/הצטרפו\s+ל(ערוץ|קבוצה)/g, '');
 
-  // 8. Clean up excessive whitespace
+  // 9. Remove ## / ### section separators (used by Telegram channels)
+  text = text.replace(/^#{2,}\s*$/gm, '');
+
+  // 10. Remove Telegram channel promo lines (Hebrew patterns)
+  text = text.replace(/צרפו עוד חברים לערוץ.*$/gm, '');
+  text = text.replace(/פתחנו.*גם ב(אינסטגרם|טוויטר|טלגרם|פייסבוק).*$/gm, '');
+  text = text.replace(/כדאי לעקוב אחרי (הערוץ|הקבוצה).*$/gm, '');
+
+  // 11. Remove "N תגובות" / "תגובה אחת" (comment count footers)
+  text = text.replace(/^\d+\s+תגובות\s*$/gm, '');
+  text = text.replace(/^תגובה\s+אחת\s*$/gm, '');
+
+  // 12. Clean up excessive whitespace
   text = text.replace(/\n{3,}/g, '\n\n');
   text = text.replace(/[ \t]+/g, ' ');
   text = text.trim();

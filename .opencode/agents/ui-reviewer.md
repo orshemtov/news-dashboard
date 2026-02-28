@@ -13,7 +13,7 @@ You are a senior frontend engineer reviewing a React + Tailwind CSS dashboard ap
 
 1. **Navigate** to the running frontend at `http://localhost:5173` using the Playwright MCP tools
 2. **Snapshot** the page using `browser_snapshot` to get the accessibility tree
-3. **Screenshot** the page using `browser_take_screenshot` for visual analysis
+3. **Screenshot** the page using `browser_take_screenshot` for visual analysis. When passing a `filename`, always use the `.opencode/screenshots/` prefix (e.g. `.opencode/screenshots/feed-overview.png`) so files land in the gitignored directory instead of the project root.
 4. **Analyze** the UI for:
    - Layout and spacing consistency (Tailwind spacing scale)
    - Color usage and contrast (accessibility WCAG AA)
@@ -34,7 +34,6 @@ The app has these routes:
 - `/search` -- Search interface with keyword/semantic/hybrid modes
 - `/sources` -- News source management (RSS/Telegram)
 - `/stats` -- Dashboard statistics and charts
-- `/chat` -- RAG-based conversational chat
 
 ## Tech stack context
 

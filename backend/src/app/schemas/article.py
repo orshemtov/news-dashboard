@@ -4,6 +4,19 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 
+class MediaAttachment(BaseModel):
+    """A single media attachment on an article."""
+
+    type: str  # "photo" | "video"
+    url: str  # relative path served by /api/media/
+    thumbnail_url: str | None = None
+    mime_type: str | None = None
+    file_size: int | None = None  # bytes
+    width: int | None = None
+    height: int | None = None
+    duration: float | None = None  # seconds, for video
+
+
 class ArticleBase(BaseModel):
     title: str | None = None
     content: str
@@ -19,6 +32,7 @@ class ArticleCreate(ArticleBase):
     external_id: str
     raw_data: dict = {}
     metadata_: dict = {}
+    media_attachments: list[MediaAttachment] = []
 
 
 class ArticleResponse(ArticleBase):
@@ -30,6 +44,7 @@ class ArticleResponse(ArticleBase):
     is_duplicate: bool = False
     dedup_cluster_id: UUID | None = None
     metadata_: dict = {}
+    media_attachments: list[MediaAttachment] = []
 
 
 class ArticleDetail(ArticleResponse):

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from loguru import logger
@@ -35,10 +35,15 @@ def article_to_sse_dict(article: Article) -> dict[str, Any]:
         "source_name": article.source_name,
         "published_at": article.published_at.isoformat() if article.published_at else None,
         "summary": article.summary,
-        "ingested_at": article.ingested_at.isoformat() if article.ingested_at else None,
+        "ingested_at": (
+            article.ingested_at.isoformat()
+            if article.ingested_at
+            else datetime.now(tz=UTC).isoformat()
+        ),
         "is_duplicate": article.is_duplicate,
         "dedup_cluster_id": str(article.dedup_cluster_id) if article.dedup_cluster_id else None,
         "metadata_": article.metadata_ or {},
+        "media_attachments": article.media_attachments or [],
     }
 
 

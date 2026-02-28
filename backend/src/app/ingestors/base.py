@@ -18,6 +18,7 @@ class RawArticle:
     published_at: datetime = field(default_factory=datetime.now)
     raw_data: dict = field(default_factory=dict)
     metadata: dict = field(default_factory=dict)
+    media_attachments: list[dict] = field(default_factory=list)
 
 
 class BaseIngestor(abc.ABC):

@@ -11,7 +11,7 @@ from app.ingestors import RawArticle, TelegramIngestor
 from app.ingestors.base import BaseIngestor
 from app.models import Article, Source
 from app.services.embedding import EmbeddingService
-from app.services.events import NewArticlesEvent, event_bus
+from app.services.events import NewArticlesEvent, article_to_sse_dict, event_bus
 
 # ------------------------------------------------------------------
 # Module-level embedding service (lazy singleton)
@@ -118,6 +118,7 @@ def _raw_to_article(raw: RawArticle, source: Source, dedup_hash: str) -> Article
         published_at=raw.published_at,
         raw_data=raw.raw_data,
         metadata_=raw.metadata,
+        media_attachments=raw.media_attachments,
         dedup_hash=dedup_hash,
     )
 
@@ -237,6 +238,7 @@ async def ingest_source(
             NewArticlesEvent(
                 source_name=source.name,
                 count=new_count,
+                articles=[article_to_sse_dict(a) for a in new_articles],
             )
         )
 

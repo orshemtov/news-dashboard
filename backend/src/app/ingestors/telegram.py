@@ -89,13 +89,23 @@ class TelegramIngestor(BaseIngestor):
 
         for msg in messages:
             content = _extract_message_content(msg)
-            if not content:
+            has_media = _has_media(msg)
+
+            # Skip messages with no text AND no media
+            if not content and not has_media:
                 continue
 
             # Clean Telegram formatting
-            content = _clean_telegram_content(content)
-            if not content:
+            if content:
+                content = _clean_telegram_content(content)
+
+            # After cleaning, if still no text and no media, skip
+            if not content and not has_media:
                 continue
+
+            # For media-only messages, use a placeholder so dedup/embedding work
+            if not content:
+                content = "[media]"
 
             published_at: datetime = msg.date or datetime.now(tz=UTC)
             if published_at.tzinfo is None:
@@ -112,6 +122,21 @@ class TelegramIngestor(BaseIngestor):
                 if hasattr(msg.forward, "from_name") and msg.forward.from_name:
                     fwd_meta["forwarded_from"] = msg.forward.from_name
 
+            # Download media attachments
+            media_attachments: list[dict] = []
+            if has_media:
+                try:
+                    from app.services.media import download_telegram_media
+
+                    ext_id = f"tg-{self._channel}-{msg.id}"
+                    media_attachments = await download_telegram_media(self._client, msg, ext_id)
+                except Exception:
+                    logger.warning(
+                        "Media download failed for msg {} in {}",
+                        msg.id,
+                        self._channel,
+                    )
+
             articles.append(
                 RawArticle(
                     external_id=f"tg-{self._channel}-{msg.id}",
@@ -125,6 +150,7 @@ class TelegramIngestor(BaseIngestor):
                     published_at=published_at,
                     raw_data=raw_data,
                     metadata=fwd_meta,
+                    media_attachments=media_attachments,
                 )
             )
 
@@ -204,6 +230,25 @@ def _extract_message_content(msg: Any) -> str:
     if not text:
         text = getattr(msg, "message", None) or ""
     return text.strip()
+
+
+def _has_media(msg: Any) -> bool:
+    """Check whether a Telegram message contains downloadable photo/video media."""
+    media = getattr(msg, "media", None)
+    if media is None:
+        return False
+
+    from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto
+
+    if isinstance(media, MessageMediaPhoto):
+        return True
+    if isinstance(media, MessageMediaDocument):
+        doc = media.document
+        if doc is None:
+            return False
+        mime = getattr(doc, "mime_type", "") or ""
+        return mime.startswith("video/")
+    return False
 
 
 def _clean_telegram_content(text: str) -> str:

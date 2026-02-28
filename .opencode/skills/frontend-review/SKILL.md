@@ -22,7 +22,7 @@ Use Playwright MCP tools in this order:
 ```
 browser_navigate -> http://localhost:5173/<route>
 browser_snapshot  -> get the accessibility tree (structure, text, roles)
-browser_take_screenshot -> get visual output
+browser_take_screenshot -> get visual output (use filename prefix `.opencode/screenshots/` e.g. `.opencode/screenshots/feed-overview.png`)
 ```
 
 ### Step 2: Analyze
@@ -42,8 +42,8 @@ Evaluate the screenshot and snapshot against these criteria:
 
 Reference specific files and components:
 
-- Pages are in `frontend/src/pages/` (Feed.tsx, Search.tsx, Sources.tsx, Stats.tsx, Chat.tsx)
-- Reusable components are in `frontend/src/components/` (organized by feature: feed/, search/, sources/, stats/, chat/)
+- Pages are in `frontend/src/pages/` (Feed.tsx, Sources.tsx)
+- Reusable components are in `frontend/src/components/` (organized by feature: feed/, sources/)
 - UI primitives are in `frontend/src/components/ui/` (shadcn/ui)
 - Layout components are in `frontend/src/components/layout/`
 - Use `cn()` from `frontend/src/lib/utils.ts` for conditional classes
@@ -54,7 +54,7 @@ After applying changes:
 
 ```
 browser_navigate -> http://localhost:5173/<same-route>  (force reload)
-browser_take_screenshot -> compare with before
+browser_take_screenshot -> compare with before (always use `.opencode/screenshots/` prefix for filenames)
 ```
 
 Confirm the fix looks correct. If not, iterate.
@@ -67,7 +67,6 @@ Confirm the fix looks correct. If not, iterate.
 | `/search` | Search input, mode selector, results | Input focus states, mode toggle, result highlighting, empty state |
 | `/sources` | Source list, add dialog, status badges | Table alignment, dialog form layout, status indicators |
 | `/stats` | Stat cards, charts | Number formatting, chart responsiveness, card grid |
-| `/chat` | Message list, input area, citations | Message bubble alignment, citation links, scroll behavior |
 
 ## Interaction testing
 

@@ -37,7 +37,6 @@ cd backend && mise run migrate-new -- "describe the change"
 | `backend/src/app/models/base.py` | `DeclarativeBase` + `TimestampMixin` |
 | `backend/src/app/models/article.py` | Article model with pgvector `Vector(384)` column |
 | `backend/src/app/models/source.py` | Source model with RSS/Telegram config |
-| `backend/src/app/models/chat.py` | ChatConversation + ChatMessage models |
 
 ## Important: model imports in env.py
 
@@ -47,7 +46,6 @@ For autogenerate to detect changes, `alembic/env.py` must import all models. Ver
 from app.models.base import Base
 from app.models.article import Article
 from app.models.source import Source
-from app.models.chat import ChatConversation, ChatMessage
 
 target_metadata = Base.metadata
 ```

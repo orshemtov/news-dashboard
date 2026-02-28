@@ -16,7 +16,7 @@ from telethon import TelegramClient, events
 
 from app.db.session import async_session_factory
 from app.models import Article, Source
-from app.services.events import NewArticlesEvent, event_bus
+from app.services.events import NewArticlesEvent, article_to_sse_dict, event_bus
 
 # Keep track of the handler so we can remove it on shutdown
 _handler_ref: object | None = None
@@ -71,17 +71,27 @@ async def start_realtime_listener(client: TelegramClient) -> None:
             _detect_language,
             _extract_message_content,
             _get_author,
+            _has_media,
         )
         from app.services.ingestion import _compute_dedup_hash
 
         msg = event.message
         content = _extract_message_content(msg)
-        if not content:
+        has_media = _has_media(msg)
+
+        # Skip messages with no text AND no media
+        if not content and not has_media:
             return
 
-        content = _clean_telegram_content(content)
-        if not content:
+        if content:
+            content = _clean_telegram_content(content)
+
+        if not content and not has_media:
             return
+
+        # For media-only messages, use a placeholder
+        if not content:
+            content = "[media]"
 
         # Identify which source this belongs to
         chat = await event.get_chat()
@@ -100,6 +110,7 @@ async def start_realtime_listener(client: TelegramClient) -> None:
         dedup_hash = _compute_dedup_hash(content)
 
         # Persist within its own DB session
+        article_dict: dict | None = None
         try:
             async with async_session_factory() as db, db.begin():
                 # Check dedup
@@ -115,6 +126,19 @@ async def start_realtime_listener(client: TelegramClient) -> None:
                     if hasattr(msg.forward, "from_name") and msg.forward.from_name:
                         fwd_meta["forwarded_from"] = msg.forward.from_name
 
+                # Download media attachments
+                media_attachments: list[dict] = []
+                if has_media:
+                    try:
+                        from app.services.media import download_telegram_media
+
+                        media_attachments = await download_telegram_media(client, msg, external_id)
+                    except Exception:
+                        logger.warning(
+                            "Media download failed for real-time msg {}",
+                            msg.id,
+                        )
+
                 article = Article(
                     external_id=external_id,
                     source_id=source.id,
@@ -128,9 +152,14 @@ async def start_realtime_listener(client: TelegramClient) -> None:
                     published_at=published_at,
                     raw_data={},
                     metadata_=fwd_meta,
+                    media_attachments=media_attachments,
                     dedup_hash=dedup_hash,
                 )
                 db.add(article)
+
+                # Flush to populate DB-generated fields (id, etc.)
+                await db.flush()
+                article_dict = article_to_sse_dict(article)
 
                 # Update source bookkeeping
                 source_row = await db.get(Source, source.id)
@@ -159,7 +188,14 @@ async def start_realtime_listener(client: TelegramClient) -> None:
                 )
 
             # Publish event to SSE bus
-            event_bus.publish(NewArticlesEvent(count=1, source_name=source.name))
+            if article_dict:
+                event_bus.publish(
+                    NewArticlesEvent(
+                        count=1,
+                        source_name=source.name,
+                        articles=[article_dict],
+                    )
+                )
             logger.info(
                 "Real-time: new article from {} (msg_id={})",
                 source.name,
