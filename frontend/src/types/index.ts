@@ -114,6 +114,8 @@ export interface SearchResponse {
 export interface ChatMessageRequest {
   message: string;
   conversation_id?: string;
+  provider?: string;
+  model?: string;
 }
 
 export interface ChatMessage {
@@ -135,6 +137,18 @@ export interface Conversation {
 
 export interface ConversationListResponse {
   items: Conversation[];
+}
+
+export interface ChatProvider {
+  id: string;
+  name: string;
+  models: string[];
+}
+
+export interface ChatConfig {
+  default_provider: string;
+  default_model: string;
+  providers: ChatProvider[];
 }
 
 // ---------------------------------------------------------------------------

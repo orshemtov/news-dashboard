@@ -39,7 +39,7 @@ wait
 """
 
 [tasks.infra]
-description = "Start infrastructure (Postgres, Kafka, Ollama)"
+description = "Start infrastructure (Postgres, Ollama)"
 dir = "{{config_root}}"
 run = "docker compose up -d"
 

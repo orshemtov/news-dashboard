@@ -6,9 +6,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.config import get_settings
 from app.db import get_db
 from app.models.chat import ChatConversation, ChatMessage
 from app.schemas.chat import (
+    ChatConfigResponse,
     ChatMessageRequest,
     ChatMessageResponse,
     ConversationListResponse,
@@ -17,6 +19,30 @@ from app.schemas.chat import (
 from app.services.chat import ChatService
 
 router = APIRouter(tags=["chat"])
+
+
+@router.get("/config", response_model=ChatConfigResponse)
+async def get_chat_config() -> ChatConfigResponse:
+    """Return available LLM providers and models."""
+    settings = get_settings()
+    return ChatConfigResponse(
+        default_provider=settings.llm_provider,
+        default_model=(
+            settings.llm_model if settings.llm_provider == "ollama" else settings.openai_model
+        ),
+        providers=[
+            {
+                "id": "ollama",
+                "name": "Ollama (local)",
+                "models": [settings.llm_model],
+            },
+            {
+                "id": "openai",
+                "name": "OpenAI",
+                "models": ["gpt-5.2", "gpt-4.1", "gpt-4.1-mini", "o4-mini"],
+            },
+        ],
+    )
 
 
 @router.post("/", response_model=ChatMessageResponse)
@@ -57,7 +83,10 @@ async def send_message(
     chat_service = ChatService(db)
     try:
         response_text, cited_ids = await chat_service.chat(
-            body.message, conversation_id=conversation.id
+            body.message,
+            conversation_id=conversation.id,
+            provider=body.provider,
+            model=body.model,
         )
     except Exception as exc:
         logger.error("Chat service error: {}", exc)
@@ -68,7 +97,7 @@ async def send_message(
         conversation_id=conversation.id,
         role="assistant",
         content=response_text,
-        model_used=chat_service._get_model_name(),
+        model_used=chat_service._resolve_model_name(body.provider, body.model),
         cited_article_ids=cited_ids,
     )
     db.add(assistant_msg)

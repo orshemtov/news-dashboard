@@ -1,11 +1,20 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import type { ChatMessageRequest } from '@/types';
 import {
+  getChatConfig,
   getConversations,
   getConversation,
   sendChatMessage,
   deleteConversation,
 } from '@/api/client';
+
+export function useChatConfig() {
+  return useQuery({
+    queryKey: ['chatConfig'],
+    queryFn: getChatConfig,
+    staleTime: 5 * 60 * 1000, // config rarely changes
+  });
+}
 
 export function useConversations() {
   return useQuery({

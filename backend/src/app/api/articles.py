@@ -1,13 +1,17 @@
+import asyncio
+import json
 from datetime import datetime
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.models.article import Article
 from app.schemas.article import ArticleDetail, ArticleListResponse, ArticleResponse
+from app.services.events import event_bus
 
 router = APIRouter(tags=["articles"])
 
@@ -83,3 +87,46 @@ async def delete_article(
     if article is None:
         raise HTTPException(status_code=404, detail="Article not found")
     await db.delete(article)
+
+
+# ------------------------------------------------------------------
+# SSE stream – real-time article notifications
+# ------------------------------------------------------------------
+
+
+@router.get("/stream")
+async def article_stream() -> StreamingResponse:
+    """Server-Sent Events endpoint that pushes notifications when new
+    articles are ingested.  Frontend clients can use ``EventSource`` to
+    subscribe and invalidate their query cache instantly.
+    """
+
+    async def _generate():
+        queue = event_bus.subscribe()
+        try:
+            # Send an initial heartbeat so the client knows the
+            # connection is alive.
+            yield "event: connected\ndata: {}\n\n"
+
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30)
+                    yield f"event: new_articles\ndata: {json.dumps(event.to_dict())}\n\n"
+                except asyncio.TimeoutError:
+                    # Send a keepalive comment to prevent proxy/browser
+                    # timeouts.
+                    yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            event_bus.unsubscribe(queue)
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

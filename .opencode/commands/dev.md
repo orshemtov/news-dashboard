@@ -6,7 +6,7 @@ Start the full development environment for the news-dashboard project.
 
 Run the following steps in order:
 
-1. Start infrastructure services (PostgreSQL, Kafka, Ollama):
+1. Start infrastructure services (PostgreSQL, Ollama):
    !`mise run infra`
 
 2. Wait a few seconds for services to be healthy, then start the backend:

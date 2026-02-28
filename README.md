@@ -49,7 +49,6 @@ Floating chat panel with RAG-based Q&A over your articles. Uses hybrid search to
 | Backend | Python 3.13, FastAPI, SQLAlchemy (async) + asyncpg, Alembic |
 | Frontend | React 19, TypeScript, Vite 7, Tailwind CSS 4, shadcn/ui |
 | Database | PostgreSQL 16 with pgvector (384-dim embeddings) |
-| Messaging | Apache Kafka (KRaft mode) |
 | AI/LLM | Ollama (llama3.1:8b) or OpenAI (gpt-4o-mini) |
 | Embeddings | sentence-transformers (paraphrase-multilingual-MiniLM-L12-v2) or OpenAI |
 
@@ -76,7 +75,7 @@ mise run setup
 This will:
 1. Copy `.env.example` to `.env`
 2. Install backend (uv) and frontend (pnpm) dependencies
-3. Start Docker services (PostgreSQL, Kafka, Ollama, pgweb)
+3. Start Docker services (PostgreSQL, Ollama, pgweb)
 4. Run database migrations
 
 ### Download the AI model
@@ -129,7 +128,6 @@ TELEGRAM_API_HASH=your_api_hash
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/news_dashboard` | PostgreSQL connection string |
-| `KAFKA_BOOTSTRAP_SERVERS` | `localhost:9092` | Kafka broker address |
 | `LLM_PROVIDER` | `ollama` | LLM provider (`ollama` or `openai`) |
 | `LLM_MODEL` | `llama3.1:8b` | Model name for the configured provider |
 | `OLLAMA_BASE_URL` | `http://localhost:11434` | Ollama server URL |
@@ -165,14 +163,11 @@ This starts the infrastructure (Docker), runs migrations, and launches:
 ### Start components individually
 
 ```bash
-# Infrastructure only (Postgres, Kafka, Ollama)
+# Infrastructure only (Postgres, Ollama)
 mise run infra
 
 # Backend API server (from backend/)
 mise run serve
-
-# Kafka consumer worker (from backend/)
-mise run worker
 
 # Frontend dev server (from frontend/)
 mise run serve
@@ -219,18 +214,17 @@ news-dashboard/
 │       ├── api/          # REST API routes
 │       ├── models/       # SQLAlchemy ORM models
 │       ├── schemas/      # Pydantic request/response schemas
-│       ├── services/     # Business logic (AI, search, embedding, dedup, ingestion)
+│       ├── services/     # Business logic (AI, search, embedding, dedup, ingestion, events, telegram_listener)
 │       ├── ingestors/    # Data source adapters (Telegram)
-│       ├── workers/      # Kafka consumer worker
 │       └── db/           # Async database session factory
 ├── frontend/
 │   └── src/
 │       ├── api/          # Axios API client
-│       ├── hooks/        # React Query hooks
+│       ├── hooks/        # React Query hooks + SSE article stream
 │       ├── pages/        # Route pages (Feed, Search, Sources, Stats, Chat)
 │       ├── components/   # UI components organized by feature
 │       └── types/        # TypeScript interfaces
-├── docker-compose.yml    # PostgreSQL, Kafka, Ollama, pgweb
+├── docker-compose.yml    # PostgreSQL, Ollama, pgweb
 └── mise.toml             # Task runner configuration
 ```
 
@@ -239,32 +233,34 @@ news-dashboard/
 ```
 Telegram Channels
       │
-      ▼
-  Ingestors ──▶ Kafka (raw-articles) ──▶ Consumer Worker
-                                              │
-                                        embed + dedup
-                                              │
-                                              ▼
-                                    Kafka (enriched-articles)
-                                              │
-                                              ▼
-                                         PostgreSQL
-                                         (pgvector)
-                                              │
-                                              ▼
-                                     FastAPI Backend
-                                              │
-                                              ▼
-                                    React Frontend
+      ├──────────────────────────┐
+      ▼                          ▼
+  Real-time Listener       Polling (fallback)
+  (Telethon events)        (per-source interval)
+      │                          │
+      └──────────┬───────────────┘
+                 │
+           embed + dedup
+                 │
+                 ▼
+            PostgreSQL
+            (pgvector)
+                 │
+          ┌──────┴──────┐
+          ▼              ▼
+    FastAPI API      SSE Stream
+          │              │
+          ▼              ▼
+       React Frontend
 ```
 
 ### Ingestion Pipeline
 
-Two parallel ingestion paths are available:
+Two complementary ingestion paths run simultaneously:
 
-**Direct polling (default)** -- A background task polls all enabled sources on a configurable interval (default: 5 minutes). New sources are ingested immediately on creation via a fire-and-forget background task. Articles are deduplicated by content hash, embedded in batch, and stored directly to PostgreSQL.
+**Real-time listener (primary)** -- A Telethon event handler listens for `NewMessage` events from all configured Telegram channels. New messages are processed immediately through the embed + dedup pipeline and stored to PostgreSQL. An SSE event is pushed to all connected frontend clients, triggering an instant UI refresh.
 
-**Kafka consumer (alternative)** -- Ingestors publish to `raw-articles`, a consumer worker processes each message (embed + dedup), publishes to `enriched-articles`, and stores to the database. Consumer group: `news-dashboard-workers`.
+**Polling (fallback/catch-up)** -- A background task checks all enabled sources on a 60-second loop. Each source has its own `poll_interval_seconds` setting, and only sources due for a poll are processed. Uses cursor-based fetching (`min_id`) to only retrieve messages newer than the last ingested one. This catches any messages missed by the real-time listener.
 
 ### Deduplication
 

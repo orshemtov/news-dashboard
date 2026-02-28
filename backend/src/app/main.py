@@ -38,8 +38,18 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
         from app.services.telegram_client import get_telegram_client
 
         try:
-            await get_telegram_client()
+            client = await get_telegram_client()
             logger.info("Telegram client ready")
+
+            # Start real-time listener for instant message delivery
+            from app.services.telegram_listener import start_realtime_listener
+
+            try:
+                await start_realtime_listener(client)
+            except Exception:
+                logger.warning(
+                    "Real-time Telegram listener failed to start — falling back to polling only"
+                )
         except Exception:
             logger.warning("Telegram client failed to connect — ingestion will be unavailable")
 
@@ -60,13 +70,31 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None]:
     # Disconnect shared Telegram client
     from app.services.telegram_client import disconnect_telegram_client
 
+    # Stop real-time listener before disconnecting
+    if settings.telegram_api_id and settings.telegram_api_hash:
+        from app.services.telegram_listener import stop_realtime_listener
+
+        try:
+            from app.services.telegram_client import get_telegram_client
+
+            client = await get_telegram_client()
+            await stop_realtime_listener(client)
+        except Exception:
+            pass
+
     await disconnect_telegram_client()
 
     logger.info("News Dashboard API shutting down")
 
 
 async def _polling_loop(interval: int) -> None:
-    """Periodically ingest all enabled sources."""
+    """Periodically check for sources due for ingestion.
+
+    The *interval* controls how often this loop wakes up and checks.
+    Actual per-source polling frequency is governed by each source's
+    ``poll_interval_seconds`` column, checked inside
+    ``ingest_all_sources``.
+    """
     # Wait a bit on startup before first poll to let things settle
     await asyncio.sleep(10)
 

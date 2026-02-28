@@ -2,6 +2,7 @@ import axios from 'axios';
 import type {
   ArticleDetail,
   ArticleListResponse,
+  ChatConfig,
   ChatMessage,
   ChatMessageRequest,
   Conversation,
@@ -98,6 +99,9 @@ export const getStats = () =>
 // ---------------------------------------------------------------------------
 // Chat
 // ---------------------------------------------------------------------------
+
+export const getChatConfig = () =>
+  api.get<ChatConfig>('/chat/config').then((r) => r.data);
 
 export const sendChatMessage = (data: ChatMessageRequest) =>
   api.post<ChatMessage>('/chat', data).then((r) => r.data);

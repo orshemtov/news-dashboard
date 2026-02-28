@@ -41,8 +41,6 @@ backend/tests/
 ├── ingestors/
 │   ├── test_rss.py
 │   └── test_telegram.py
-└── workers/
-    └── test_consumer.py
 ```
 
 ## Key patterns
@@ -98,7 +96,7 @@ async def db_session():
 
 ### Mocking external services
 
-Mock the embedding service, Kafka producer, and LLM calls:
+Mock the embedding service and LLM calls:
 
 ```python
 from unittest.mock import AsyncMock, patch
@@ -108,15 +106,6 @@ def mock_embedding_service():
     with patch("app.services.embedding.EmbeddingService") as mock:
         instance = mock.return_value
         instance.embed_text = AsyncMock(return_value=[0.1] * 384)
-        yield instance
-
-@pytest.fixture
-def mock_kafka_producer():
-    with patch("app.services.ingestion.AIOKafkaProducer") as mock:
-        instance = mock.return_value
-        instance.send_and_wait = AsyncMock()
-        instance.start = AsyncMock()
-        instance.stop = AsyncMock()
         yield instance
 ```
 
@@ -148,7 +137,6 @@ def article_factory(db_session):
 - **API endpoints**: Status codes, response schemas, filtering, pagination, error cases
 - **Services**: Business logic (search ranking, dedup thresholds, chat RAG pipeline)
 - **Ingestors**: RSS parsing (use fixture XML), Telegram message transformation
-- **Workers**: Kafka message processing, embedding generation, dedup decisions
 
 ## What NOT to mock
 
@@ -158,6 +146,5 @@ def article_factory(db_session):
 ## What to ALWAYS mock
 
 - External HTTP calls (RSS feeds, Telegram API)
-- Kafka producer/consumer
 - LLM/embedding API calls (Ollama, OpenAI)
 - `sentence-transformers` model loading (slow, large)

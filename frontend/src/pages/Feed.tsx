@@ -1,6 +1,7 @@
 import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { useArticles } from '@/hooks/useArticles';
+import { useArticleStream } from '@/hooks/useArticleStream';
 import { useSearch } from '@/hooks/useSearch';
 import type { Article, SearchRequest } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -40,22 +41,12 @@ const TIME_RANGES = [
   { label: 'All', hours: 0 },
 ] as const;
 
-// ---------------------------------------------------------------------------
-// Refresh interval presets
-// ---------------------------------------------------------------------------
-
-const REFRESH_INTERVALS = [
-  { label: '5s', ms: 5_000 },
-  { label: '10s', ms: 10_000 },
-  { label: '30s', ms: 30_000 },
-  { label: '1m', ms: 60_000 },
-  { label: '5m', ms: 300_000 },
-  { label: 'Off', ms: 0 },
-] as const;
-
 type SortOption = 'newest' | 'oldest';
 
 export default function Feed() {
+  // SSE: auto-refresh when new articles arrive
+  useArticleStream();
+
   // Filters
   const [page, setPage] = useState(1);
   const [hideDuplicates, setHideDuplicates] = useState(true);
@@ -68,14 +59,6 @@ export default function Feed() {
     return 0; // default: All
   });
   const [sortOrder, setSortOrder] = useState<SortOption>('newest');
-  const [refreshInterval, setRefreshInterval] = useState<number>(() => {
-    const saved = localStorage.getItem('news-dashboard-refresh-interval');
-    if (saved !== null) {
-      const parsed = Number(saved);
-      if (!Number.isNaN(parsed)) return parsed;
-    }
-    return 10_000; // default: 10s
-  });
 
   // Search
   const [searchQuery, setSearchQuery] = useState('');
@@ -99,7 +82,7 @@ export default function Feed() {
     is_duplicate: hideDuplicates ? false : undefined,
     from_date: fromDate,
     to_date: undefined,
-  }, refreshInterval || false);
+  });
 
   // Search query
   const search = useSearch();
@@ -234,32 +217,8 @@ export default function Feed() {
           </div>
         </div>
 
-        {/* Row 2: Refresh + Sort + Dedup + Count */}
+        {/* Row 2: Sort + Dedup + Count */}
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-muted-foreground">Refresh</span>
-            <div className="flex rounded-md border border-input">
-              {REFRESH_INTERVALS.map((ri) => (
-                <button
-                  key={ri.label}
-                  onClick={() => {
-                    setRefreshInterval(ri.ms);
-                    localStorage.setItem('news-dashboard-refresh-interval', String(ri.ms));
-                  }}
-                  className={`px-2 py-1 text-xs font-medium transition-colors first:rounded-l-md last:rounded-r-md ${
-                    refreshInterval === ri.ms
-                      ? 'bg-primary text-primary-foreground'
-                      : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'
-                  }`}
-                >
-                  {ri.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="h-4 w-px bg-border" />
-
           <Button
             variant="outline"
             size="sm"

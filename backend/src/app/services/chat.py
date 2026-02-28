@@ -39,8 +39,16 @@ class ChatService:
         self,
         message: str,
         conversation_id: UUID | None = None,
+        provider: str | None = None,
+        model: str | None = None,
     ) -> tuple[str, list[UUID]]:
         """Process a user chat message.
+
+        Args:
+            message: The user's question.
+            conversation_id: Optional existing conversation to continue.
+            provider: Override LLM provider ("ollama" or "openai").
+            model: Override model name (e.g. "llama3.1:8b", "gpt-5.2").
 
         Returns:
             A tuple of (response_text, cited_article_ids).
@@ -64,8 +72,8 @@ class ChatService:
         context = self._build_context(articles)
 
         # 3. Generate response
-        model = self._get_model()
-        agent: Agent[None, str] = Agent(model, system_prompt=CHAT_SYSTEM_PROMPT)
+        llm = self._resolve_model(provider, model)
+        agent: Agent[None, str] = Agent(llm, system_prompt=CHAT_SYSTEM_PROMPT)
         prompt = f"Articles:\n{context}\n\nUser question: {message}"
         result = await agent.run(prompt)
         response_text = result.output
@@ -80,19 +88,35 @@ class ChatService:
     # Helpers
     # ------------------------------------------------------------------
 
-    def _get_model(self) -> OpenAIChatModel | str:
-        if self._settings.llm_provider == "ollama":
+    def _resolve_model(
+        self,
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> OpenAIChatModel | str:
+        """Build the pydantic-ai model, optionally overriding provider/model."""
+        p = provider or self._settings.llm_provider
+        if p == "ollama":
+            m = model or self._settings.llm_model
             base_url = self._settings.ollama_base_url.rstrip("/") + "/v1"
             return OpenAIChatModel(
-                model_name=self._settings.llm_model,
+                model_name=m,
                 provider=OllamaProvider(base_url=base_url),
             )
-        return f"openai:{self._settings.openai_model}"
+        m = model or self._settings.openai_model
+        return f"openai:{m}"
 
-    def _get_model_name(self) -> str:
-        if self._settings.llm_provider == "ollama":
-            return f"ollama:{self._settings.llm_model}"
-        return self._settings.openai_model
+    def _resolve_model_name(
+        self,
+        provider: str | None = None,
+        model: str | None = None,
+    ) -> str:
+        """Return a human-readable model identifier for storage."""
+        p = provider or self._settings.llm_provider
+        if p == "ollama":
+            m = model or self._settings.llm_model
+            return f"ollama:{m}"
+        m = model or self._settings.openai_model
+        return m
 
     @staticmethod
     def _build_context(articles: list[Article]) -> str:

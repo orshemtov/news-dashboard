@@ -14,15 +14,12 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/news_dashboard"
 
-    # Kafka
-    kafka_bootstrap_servers: str = "localhost:9092"
-
     # AI – LLM
     llm_provider: Literal["ollama", "openai"] = "ollama"
     llm_model: str = "llama3.1:8b"
     ollama_base_url: str = "http://localhost:11434"
     openai_api_key: str | None = None
-    openai_model: str = "gpt-4o-mini"
+    openai_model: str = "gpt-5.2"
 
     # AI – Embeddings
     embedding_provider: Literal["local", "openai"] = "local"
@@ -43,7 +40,7 @@ class Settings(BaseSettings):
     telegram_poll_interval_seconds: int = 60
     initial_backfill_hours: int = 24
     polling_enabled: bool = True
-    polling_interval_seconds: int = 300
+    polling_interval_seconds: int = 60
 
 
 @lru_cache

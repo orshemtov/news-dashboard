@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
@@ -7,6 +8,8 @@ from pydantic import BaseModel, ConfigDict
 class ChatMessageRequest(BaseModel):
     message: str
     conversation_id: UUID | None = None
+    provider: Literal["ollama", "openai"] | None = None
+    model: str | None = None
 
 
 class ChatMessageResponse(BaseModel):
@@ -32,3 +35,9 @@ class ConversationResponse(BaseModel):
 
 class ConversationListResponse(BaseModel):
     items: list[ConversationResponse]
+
+
+class ChatConfigResponse(BaseModel):
+    default_provider: str
+    default_model: str
+    providers: list[dict]

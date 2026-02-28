@@ -6,11 +6,10 @@ import {
   type ArticleListParams,
 } from '@/api/client';
 
-export function useArticles(params?: ArticleListParams, refetchInterval: number | false = 30_000) {
+export function useArticles(params?: ArticleListParams) {
   return useQuery({
     queryKey: ['articles', params],
     queryFn: () => getArticles(params),
-    refetchInterval,
   });
 }
 

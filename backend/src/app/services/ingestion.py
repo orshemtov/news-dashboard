@@ -1,4 +1,5 @@
 import hashlib
+import re
 from datetime import UTC, datetime, timedelta
 
 from loguru import logger
@@ -10,6 +11,7 @@ from app.ingestors import RawArticle, TelegramIngestor
 from app.ingestors.base import BaseIngestor
 from app.models import Article, Source
 from app.services.embedding import EmbeddingService
+from app.services.events import NewArticlesEvent, event_bus
 
 # ------------------------------------------------------------------
 # Module-level embedding service (lazy singleton)
@@ -36,11 +38,40 @@ def _compute_dedup_hash(content: str) -> str:
 
 
 # ------------------------------------------------------------------
+# Telegram cursor helpers
+# ------------------------------------------------------------------
+
+_TG_EXTERNAL_ID_RE = re.compile(r"^tg-[^-]+-(\d+)$")
+
+
+async def _get_max_telegram_msg_id(db: AsyncSession, source: Source) -> int:
+    """Return the highest Telegram message ID already ingested for *source*.
+
+    The external_id for Telegram articles follows the pattern
+    ``tg-{channel}-{msg_id}``. We extract the numeric suffix and return
+    the maximum, or 0 if no articles exist yet.
+    """
+    result = await db.execute(
+        select(Article.external_id)
+        .where(Article.source_id == source.id)
+        .where(Article.source_type == "telegram")
+        .order_by(Article.published_at.desc())
+        .limit(1)
+    )
+    latest_ext_id = result.scalar_one_or_none()
+    if latest_ext_id is None:
+        return 0
+
+    m = _TG_EXTERNAL_ID_RE.match(latest_ext_id)
+    return int(m.group(1)) if m else 0
+
+
+# ------------------------------------------------------------------
 # Ingestor factory
 # ------------------------------------------------------------------
 
 
-async def _build_ingestor(source: Source) -> BaseIngestor:
+async def _build_ingestor(source: Source, db: AsyncSession) -> BaseIngestor:
     """Instantiate the correct ingestor for *source*."""
     config: dict = source.config or {}
 
@@ -48,10 +79,16 @@ async def _build_ingestor(source: Source) -> BaseIngestor:
         from app.services.telegram_client import get_telegram_client
 
         client = await get_telegram_client()
+
+        # Find the highest Telegram message ID we already have for this source
+        # so we only fetch newer messages.
+        min_id = await _get_max_telegram_msg_id(db, source)
+
         return TelegramIngestor(
             source_name=source.name,
             config=config,
             client=client,
+            min_id=min_id,
         )
 
     raise ValueError(f"Unknown source type: {source.source_type!r}")
@@ -112,7 +149,7 @@ async def ingest_source(
     if backfill_hours is None:
         backfill_hours = settings.initial_backfill_hours
 
-    ingestor = await _build_ingestor(source)
+    ingestor = await _build_ingestor(source, db)
 
     try:
         raw_articles = await ingestor.fetch()
@@ -193,14 +230,29 @@ async def ingest_source(
         len(raw_articles),
         len(filtered),
     )
+
+    # Notify SSE subscribers about new articles
+    if new_articles:
+        event_bus.publish(
+            NewArticlesEvent(
+                source_name=source.name,
+                count=new_count,
+            )
+        )
+
     return new_count
 
 
 async def ingest_all_sources(db: AsyncSession) -> dict[str, int]:
     """Fetch all enabled sources and ingest each one.
 
+    Only sources whose ``poll_interval_seconds`` has elapsed since
+    ``last_polled_at`` are included. This respects per-source polling
+    frequency instead of blindly polling everything on every cycle.
+
     Returns a mapping of ``source_name -> new_article_count``.
     """
+    now = datetime.now(tz=UTC)
     result = await db.execute(select(Source).where(Source.enabled.is_(True)))
     sources = list(result.scalars().all())
 
@@ -208,8 +260,29 @@ async def ingest_all_sources(db: AsyncSession) -> dict[str, int]:
         logger.info("No enabled sources found — nothing to ingest.")
         return {}
 
-    summary: dict[str, int] = {}
+    # Filter to sources that are due for a poll
+    due_sources: list[Source] = []
     for source in sources:
+        if source.last_polled_at is None:
+            due_sources.append(source)
+            continue
+        elapsed = (now - source.last_polled_at).total_seconds()
+        if elapsed >= source.poll_interval_seconds:
+            due_sources.append(source)
+        else:
+            logger.debug(
+                "Source {}: skipping, polled {:.0f}s ago (interval={}s)",
+                source.name,
+                elapsed,
+                source.poll_interval_seconds,
+            )
+
+    if not due_sources:
+        logger.debug("No sources due for polling this cycle.")
+        return {}
+
+    summary: dict[str, int] = {}
+    for source in due_sources:
         try:
             count = await ingest_source(source, db)
         except Exception:

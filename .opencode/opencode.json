@@ -14,16 +14,6 @@
       ],
       "enabled": true
     },
-    "kafka": {
-      "type": "local",
-      "command": ["kafka-mcp-server"],
-      "environment": {
-        "KAFKA_BROKERS": "localhost:9092",
-        "KAFKA_CLIENT_ID": "opencode-mcp",
-        "MCP_TRANSPORT": "stdio"
-      },
-      "enabled": true
-    },
     "context7": {
       "type": "remote",
       "url": "https://mcp.context7.com/mcp"

@@ -20,11 +20,14 @@ class TelegramIngestor(BaseIngestor):
         source_name: str,
         config: dict,
         client: TelegramClient,
+        *,
+        min_id: int = 0,
     ) -> None:
         super().__init__(source_name, config)
         self._client = client
         self._channel: str = config.get("channel", "")
         self._limit: int = config.get("limit", _DEFAULT_LIMIT)
+        self._min_id: int = min_id
 
     # ------------------------------------------------------------------
     # Public API
@@ -73,7 +76,14 @@ class TelegramIngestor(BaseIngestor):
             )
             return []
 
-        raw_messages = await self._client.get_messages(entity, limit=self._limit)
+        # Use min_id to only fetch messages newer than the last known one.
+        # This avoids missing messages when a channel posts more than `limit`
+        # messages between polls, and makes dedup cheaper.
+        kwargs: dict[str, Any] = {"limit": self._limit}
+        if self._min_id > 0:
+            kwargs["min_id"] = self._min_id
+
+        raw_messages = await self._client.get_messages(entity, **kwargs)
         messages: list[Any] = list(raw_messages) if raw_messages else []  # type: ignore[arg-type]
         articles: list[RawArticle] = []
 
