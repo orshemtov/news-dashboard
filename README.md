@@ -87,7 +87,7 @@ mise run setup
 This will:
 1. Copy `.env.example` to `.env`
 2. Install backend (uv) and frontend (pnpm) dependencies
-3. Start Docker services (PostgreSQL, Ollama)
+3. Start Docker services (PostgreSQL)
 4. Run database migrations
 
 ### Telegram credentials
@@ -114,7 +114,7 @@ This starts infrastructure (Docker), runs migrations, and launches:
 ### Start components individually
 
 ```bash
-# Infrastructure only (Postgres, Ollama)
+# Infrastructure only (Postgres)
 mise run infra
 
 # Backend API server (from backend/)
@@ -245,7 +245,7 @@ news-dashboard/
 │       ├── pages/        # Route pages (Feed, Sources)
 │       ├── components/   # UI components organized by feature
 │       └── types/        # TypeScript interfaces
-├── docker-compose.yml    # PostgreSQL, Ollama
+├── docker-compose.yml    # PostgreSQL
 └── mise.toml             # Task runner configuration
 ```
 

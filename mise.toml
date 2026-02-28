@@ -13,7 +13,7 @@ sleep 5
 (cd backend && uv run alembic upgrade head)
 echo ""
 echo "Setup complete! Run 'mise run dev' to start developing."
-echo "Run 'mise run ollama-pull' to download the default AI model."
+echo "Run 'mise run dev' to start developing."
 """
 
 [tasks.dev]
@@ -39,7 +39,7 @@ wait
 """
 
 [tasks.infra]
-description = "Start infrastructure (Postgres, Ollama)"
+description = "Start infrastructure (Postgres)"
 dir = "{{config_root}}"
 run = "docker compose up -d"
 
@@ -58,7 +58,3 @@ description = "Reset all infrastructure data"
 dir = "{{config_root}}"
 run = "docker compose down -v && docker compose up -d"
 
-[tasks.ollama-pull]
-description = "Pull default Ollama model"
-dir = "{{config_root}}"
-run = "docker compose exec ollama ollama pull ${MODEL:-llama3.1:8b}"

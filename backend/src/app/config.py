@@ -13,9 +13,6 @@ class Settings(BaseSettings):
     # Database
     database_url: str = "postgresql+asyncpg://postgres:postgres@localhost:5432/news_dashboard"
 
-    # AI – LLM (Ollama)
-    llm_model: str = "llama3.1:8b"
-
     # AI – Embeddings (local sentence-transformers)
     embedding_model: str = "paraphrase-multilingual-MiniLM-L12-v2"
 

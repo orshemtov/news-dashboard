@@ -13,7 +13,6 @@ dependencies = [
     "fastapi[standard]>=0.134.0",
     "loguru>=0.7.3",
     "pgvector>=0.4.2",
-    "pydantic-ai>=1.63.0",
     "pydantic-settings>=2.13.1",
     "sentence-transformers>=5.2.3",
     "sqlalchemy[asyncio]>=2.0.47",
