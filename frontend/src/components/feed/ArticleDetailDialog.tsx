@@ -121,7 +121,7 @@ function MediaGallery({ attachments }: { attachments: MediaAttachment[] }) {
               <img
                 src={mediaUrl(att.url)}
                 alt=""
-                className="h-full w-full object-cover transition-transform group-hover/media:scale-105"
+                className="h-full w-full object-contain transition-transform group-hover/media:scale-105"
                 loading="lazy"
               />
             ) : (
@@ -130,7 +130,7 @@ function MediaGallery({ attachments }: { attachments: MediaAttachment[] }) {
                   <img
                     src={mediaUrl(att.thumbnail_url)}
                     alt=""
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                     loading="lazy"
                   />
                 ) : (

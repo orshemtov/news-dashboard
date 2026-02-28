@@ -11,6 +11,7 @@ from loguru import logger
 
 from app.config import get_settings
 from app.db.session import async_session_factory
+from app.services.events import event_bus
 from app.services.ingestion import ingest_all_sources
 
 # ---------------------------------------------------------------------------
@@ -99,16 +100,20 @@ async def _polling_loop(interval: int) -> None:
     await asyncio.sleep(10)
 
     while True:
+        pending_events = []
         try:
             async with async_session_factory() as db, db.begin():
-                summary = await ingest_all_sources(db)
-                if summary:
-                    total = sum(summary.values())
-                    logger.info(
-                        "Polling cycle complete: {} new articles from {} sources",
-                        total,
-                        len(summary),
-                    )
+                summary, pending_events = await ingest_all_sources(db)
+            # Transaction committed – now safe to notify SSE clients
+            for event in pending_events:
+                event_bus.publish(event)
+            if summary:
+                total = sum(summary.values())
+                logger.info(
+                    "Polling cycle complete: {} new articles from {} sources",
+                    total,
+                    len(summary),
+                )
         except Exception:
             logger.exception("Error in polling cycle")
 

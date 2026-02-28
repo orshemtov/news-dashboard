@@ -11,7 +11,7 @@ from app.ingestors import RawArticle, TelegramIngestor
 from app.ingestors.base import BaseIngestor
 from app.models import Article, Source
 from app.services.embedding import EmbeddingService
-from app.services.events import NewArticlesEvent, article_to_sse_dict, event_bus
+from app.services.events import NewArticlesEvent, article_to_sse_dict
 
 # ------------------------------------------------------------------
 # Module-level embedding service (lazy singleton)
@@ -134,9 +134,13 @@ async def ingest_source(
     *,
     backfill_hours: int | None = None,
     generate_embeddings: bool = True,
-) -> int:
-    """Ingest articles from a single *source*. Returns the number of new
-    articles stored.
+) -> tuple[int, NewArticlesEvent | None]:
+    """Ingest articles from a single *source*.
+
+    Returns a ``(new_count, pending_event)`` tuple.  The caller is
+    responsible for publishing *pending_event* via the event bus **after**
+    the database transaction has been committed so that SSE clients never
+    receive phantom articles.
 
     Parameters
     ----------
@@ -159,7 +163,7 @@ async def ingest_source(
         source.error_message = str(exc)
         source.last_polled_at = datetime.now(tz=UTC)
         await db.flush()
-        return 0
+        return 0, None
 
     # Filter by backfill window
     cutoff = datetime.now(tz=UTC) - timedelta(hours=backfill_hours)
@@ -232,27 +236,31 @@ async def ingest_source(
         len(filtered),
     )
 
-    # Notify SSE subscribers about new articles
+    # Build the SSE event but do NOT publish yet – the caller must
+    # publish after the DB transaction commits.
+    pending_event: NewArticlesEvent | None = None
     if new_articles:
-        event_bus.publish(
-            NewArticlesEvent(
-                source_name=source.name,
-                count=new_count,
-                articles=[article_to_sse_dict(a) for a in new_articles],
-            )
+        pending_event = NewArticlesEvent(
+            source_name=source.name,
+            count=new_count,
+            articles=[article_to_sse_dict(a) for a in new_articles],
         )
 
-    return new_count
+    return new_count, pending_event
 
 
-async def ingest_all_sources(db: AsyncSession) -> dict[str, int]:
+async def ingest_all_sources(
+    db: AsyncSession,
+) -> tuple[dict[str, int], list[NewArticlesEvent]]:
     """Fetch all enabled sources and ingest each one.
 
     Only sources whose ``poll_interval_seconds`` has elapsed since
     ``last_polled_at`` are included. This respects per-source polling
     frequency instead of blindly polling everything on every cycle.
 
-    Returns a mapping of ``source_name -> new_article_count``.
+    Returns ``(summary, pending_events)`` where *summary* maps source
+    names to new-article counts and *pending_events* should be published
+    **after** the transaction commits.
     """
     now = datetime.now(tz=UTC)
     result = await db.execute(select(Source).where(Source.enabled.is_(True)))
@@ -260,7 +268,7 @@ async def ingest_all_sources(db: AsyncSession) -> dict[str, int]:
 
     if not sources:
         logger.info("No enabled sources found — nothing to ingest.")
-        return {}
+        return {}, []
 
     # Filter to sources that are due for a poll
     due_sources: list[Source] = []
@@ -281,15 +289,19 @@ async def ingest_all_sources(db: AsyncSession) -> dict[str, int]:
 
     if not due_sources:
         logger.debug("No sources due for polling this cycle.")
-        return {}
+        return {}, []
 
     summary: dict[str, int] = {}
+    pending_events: list[NewArticlesEvent] = []
     for source in due_sources:
         try:
-            count = await ingest_source(source, db)
+            count, event = await ingest_source(source, db)
         except Exception:
             logger.exception("Unexpected error ingesting source {}", source.name)
             count = 0
+            event = None
         summary[source.name] = count
+        if event is not None:
+            pending_events.append(event)
 
-    return summary
+    return summary, pending_events

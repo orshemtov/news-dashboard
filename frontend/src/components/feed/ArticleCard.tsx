@@ -127,7 +127,7 @@ export function ArticleCard({ article, onClick, isNew, onAnimationEnd }: Article
               <img
                 src={thumbSrc}
                 alt=""
-                className="h-full w-full object-cover"
+                className="h-full w-full object-contain"
                 loading="lazy"
                 onError={(e) => {
                   (e.target as HTMLImageElement).style.display = 'none';
@@ -172,7 +172,7 @@ export function ArticleCard({ article, onClick, isNew, onAnimationEnd }: Article
                   <img
                     src={thumbSrc}
                     alt=""
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                     loading="lazy"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';

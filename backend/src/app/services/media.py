@@ -188,10 +188,13 @@ async def _download_video(
         # Extract video attributes (width, height, duration)
         width, height, duration = _get_video_attributes(doc)
 
+        # Download video thumbnail if available
+        thumb_rel = await _download_video_thumbnail(client, doc, external_id)
+
         return {
             "type": "video",
             "url": rel_path,
-            "thumbnail_url": None,
+            "thumbnail_url": thumb_rel,
             "mime_type": mime,
             "file_size": file_size or actual.stat().st_size,
             "width": width,
@@ -201,6 +204,47 @@ async def _download_video(
 
     except Exception:
         logger.exception("Failed to download video for {}", external_id)
+        return None
+
+
+async def _download_video_thumbnail(
+    client: TelegramClient,
+    doc: Any,
+    external_id: str,
+) -> str | None:
+    """Download the video thumbnail from Telegram and return its relative path.
+
+    Telegram stores pre-generated thumbnails in ``doc.thumbs`` as a list of
+    ``PhotoSize`` objects.  We pick the largest one and download it.
+    """
+    try:
+        thumbs = getattr(doc, "thumbs", None)
+        if not thumbs:
+            return None
+
+        # Pick the largest thumb -- prefer types with explicit w/h,
+        # fall back to the last entry (Telegram sorts smallest → largest).
+        best = thumbs[-1]
+        for t in thumbs:
+            if hasattr(t, "w") and hasattr(t, "h"):
+                best = t  # keep overwriting; last (largest) wins
+
+        rel_path = _build_relative_path(external_id, "_thumb.jpg")
+        abs_path = _get_media_root() / rel_path
+        abs_path.parent.mkdir(parents=True, exist_ok=True)
+
+        result = await client.download_media(doc, file=str(abs_path), thumb=best)
+        if result is None:
+            return None
+
+        actual = Path(result)
+        if actual != abs_path:
+            rel_path = str(actual.relative_to(_get_media_root()))
+
+        return rel_path
+
+    except Exception:
+        logger.warning("Failed to download video thumbnail for {}", external_id)
         return None
 
 

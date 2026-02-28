@@ -59,7 +59,7 @@ class NewArticlesEvent:
     count: int
     source_name: str
     articles: list[dict[str, Any]] = field(default_factory=list)
-    timestamp: str = field(default_factory=lambda: datetime.now().isoformat())
+    timestamp: str = field(default_factory=lambda: datetime.now(tz=UTC).isoformat())
 
     def to_dict(self) -> dict[str, Any]:
         return {

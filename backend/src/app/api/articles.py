@@ -16,6 +16,57 @@ from app.services.events import event_bus
 router = APIRouter(tags=["articles"])
 
 
+# ------------------------------------------------------------------
+# SSE stream – real-time article notifications
+# ------------------------------------------------------------------
+# NOTE: This route MUST be declared before /{article_id} so that
+# FastAPI does not try to match "stream" as a UUID path parameter.
+# ------------------------------------------------------------------
+
+
+@router.get("/stream")
+async def article_stream() -> StreamingResponse:
+    """Server-Sent Events endpoint that pushes notifications when new
+    articles are ingested.  Frontend clients can use ``EventSource`` to
+    subscribe and invalidate their query cache instantly.
+    """
+
+    async def _generate():
+        queue = event_bus.subscribe()
+        try:
+            # Send an initial heartbeat so the client knows the
+            # connection is alive.
+            yield "event: connected\ndata: {}\n\n"
+
+            while True:
+                try:
+                    event = await asyncio.wait_for(queue.get(), timeout=30)
+                    yield f"event: new_articles\ndata: {json.dumps(event.to_dict())}\n\n"
+                except asyncio.TimeoutError:
+                    # Send a keepalive comment to prevent proxy/browser
+                    # timeouts.
+                    yield ": keepalive\n\n"
+        except asyncio.CancelledError:
+            pass
+        finally:
+            event_bus.unsubscribe(queue)
+
+    return StreamingResponse(
+        _generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
+# ------------------------------------------------------------------
+# CRUD routes
+# ------------------------------------------------------------------
+
+
 @router.get("/", response_model=ArticleListResponse)
 async def list_articles(
     page: int = Query(1, ge=1),
@@ -87,46 +138,3 @@ async def delete_article(
     if article is None:
         raise HTTPException(status_code=404, detail="Article not found")
     await db.delete(article)
-
-
-# ------------------------------------------------------------------
-# SSE stream – real-time article notifications
-# ------------------------------------------------------------------
-
-
-@router.get("/stream")
-async def article_stream() -> StreamingResponse:
-    """Server-Sent Events endpoint that pushes notifications when new
-    articles are ingested.  Frontend clients can use ``EventSource`` to
-    subscribe and invalidate their query cache instantly.
-    """
-
-    async def _generate():
-        queue = event_bus.subscribe()
-        try:
-            # Send an initial heartbeat so the client knows the
-            # connection is alive.
-            yield "event: connected\ndata: {}\n\n"
-
-            while True:
-                try:
-                    event = await asyncio.wait_for(queue.get(), timeout=30)
-                    yield f"event: new_articles\ndata: {json.dumps(event.to_dict())}\n\n"
-                except asyncio.TimeoutError:
-                    # Send a keepalive comment to prevent proxy/browser
-                    # timeouts.
-                    yield ": keepalive\n\n"
-        except asyncio.CancelledError:
-            pass
-        finally:
-            event_bus.unsubscribe(queue)
-
-    return StreamingResponse(
-        _generate(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )

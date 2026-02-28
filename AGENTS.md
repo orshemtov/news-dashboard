@@ -1,6 +1,6 @@
-# News Dashboard
+# Pulse
 
-A full-stack news aggregator dashboard with AI capabilities.
+A real-time news aggregator dashboard. Collects articles from Telegram channels, deduplicates them using semantic similarity, and provides hybrid search.
 
 ## Project Structure
 
@@ -8,10 +8,10 @@ A full-stack news aggregator dashboard with AI capabilities.
 news-dashboard/
 ├── backend/            # Python 3.13, FastAPI, SQLAlchemy (async), Alembic
 │   └── src/app/
-│       ├── api/        # REST API routes (articles, sources, search, stats, ai, media)
+│       ├── api/        # REST API routes (articles, sources, search, stats, media)
 │       ├── models/     # SQLAlchemy ORM models (article, source)
 │       ├── schemas/    # Pydantic request/response schemas
-│       ├── services/   # Business logic (ai, search, embedding, dedup, ingestion, events, telegram_listener)
+│       ├── services/   # Business logic (search, embedding, dedup, ingestion, events, telegram_listener)
 │       ├── ingestors/  # Data source adapters (telegram)
 │       └── db/         # Async database session factory
 ├── frontend/           # React 19, TypeScript, Vite 7, Tailwind CSS 4, shadcn/ui
@@ -33,9 +33,8 @@ news-dashboard/
 | Backend | Python 3.13, FastAPI, SQLAlchemy (async) + asyncpg, Alembic |
 | Frontend | React 19, TypeScript 5.9, Vite 7, Tailwind CSS 4, shadcn/ui |
 | Database | PostgreSQL 16 with pgvector extension (384-dim embeddings) |
-| AI/LLM | Ollama (default: llama3.1:8b) or OpenAI (gpt-4o-mini) |
+| AI/LLM | Ollama (default: llama3.1:8b) for future features |
 | Embeddings | sentence-transformers (default: paraphrase-multilingual-MiniLM-L12-v2) or OpenAI |
-| AI Framework | pydantic-ai for agent orchestration |
 | Package Managers | uv (backend), pnpm (frontend) |
 | Task Runner | mise (replaces Make) |
 
@@ -49,7 +48,7 @@ All routes are prefixed with `/api`:
 | `/api/sources` | CRUD for news sources (RSS/Telegram), test connection, presets |
 | `/api/search` | Keyword, semantic, and hybrid (RRF) search |
 | `/api/stats` | Dashboard statistics |
-| `/api/ai` | Summarize and translate articles |
+| `/api/media` | Proxy for Telegram media (images, videos) |
 | `/api/health` | Health check |
 
 ## Database Models
