@@ -1,0 +1,37 @@
+# Backend mise.toml – Python/FastAPI tasks
+
+[tasks.serve]
+description = "Run backend dev server"
+run = "uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+
+[tasks.worker]
+description = "Run Kafka consumer worker"
+run = "uv run python -m app.workers.consumer"
+
+[tasks.migrate]
+description = "Run database migrations"
+run = "uv run alembic upgrade head"
+
+[tasks.migrate-new]
+description = "Create a new migration (usage: mise run migrate-new -- 'description')"
+run = "uv run alembic revision --autogenerate -m \"$1\""
+
+[tasks.lint]
+description = "Lint backend code"
+run = "uv run ruff check src/ && uv run ruff format --check src/"
+
+[tasks.format]
+description = "Format backend code"
+run = "uv run ruff check --fix src/ && uv run ruff format src/"
+
+[tasks.typecheck]
+description = "Run type checker"
+run = "uv run ty check src/app/"
+
+[tasks.test]
+description = "Run backend tests"
+run = "uv run pytest"
+
+[tasks.check]
+description = "Run all checks (lint + typecheck + test)"
+depends = ["lint", "typecheck", "test"]

@@ -1,0 +1,13 @@
+# Frontend mise.toml – React/Vite tasks
+
+[tasks.serve]
+description = "Run frontend dev server"
+run = "pnpm dev"
+
+[tasks.build]
+description = "Build frontend for production"
+run = "pnpm build"
+
+[tasks.lint]
+description = "Lint frontend code"
+run = "pnpm lint"

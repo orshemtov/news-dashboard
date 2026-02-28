@@ -1,0 +1,64 @@
+# Root mise.toml – full-stack and infrastructure tasks
+
+[tasks.setup]
+description = "First-time project setup"
+dir = "{{config_root}}"
+run = """
+cp -n .env.example .env || true
+(cd backend && uv sync)
+(cd frontend && pnpm install)
+docker compose up -d
+echo "Waiting for Postgres to be ready..."
+sleep 5
+(cd backend && uv run alembic upgrade head)
+echo ""
+echo "Setup complete! Run 'mise run dev' to start developing."
+echo "Run 'mise run ollama-pull' to download the default AI model."
+"""
+
+[tasks.dev]
+description = "Start everything (infra + backend + frontend)"
+dir = "{{config_root}}"
+run = """
+# Kill any stale dev processes from previous runs
+lsof -ti:8000 | xargs kill -9 2>/dev/null || true
+lsof -ti:5173 | xargs kill -9 2>/dev/null || true
+
+echo "Starting infrastructure..."
+docker compose up -d
+echo "Waiting for services..."
+sleep 5
+echo "Running migrations..."
+(cd backend && uv run alembic upgrade head)
+
+echo "Starting backend (http://localhost:8000) and frontend (http://localhost:5173)..."
+trap 'kill 0' INT TERM
+(cd backend && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000) &
+(cd frontend && pnpm exec vite --strictPort) &
+wait
+"""
+
+[tasks.infra]
+description = "Start infrastructure (Postgres, Kafka, Ollama)"
+dir = "{{config_root}}"
+run = "docker compose up -d"
+
+[tasks.infra-down]
+description = "Stop infrastructure"
+dir = "{{config_root}}"
+run = "docker compose down"
+
+[tasks.infra-logs]
+description = "Tail infrastructure logs"
+dir = "{{config_root}}"
+run = "docker compose logs -f"
+
+[tasks.infra-reset]
+description = "Reset all infrastructure data"
+dir = "{{config_root}}"
+run = "docker compose down -v && docker compose up -d"
+
+[tasks.ollama-pull]
+description = "Pull default Ollama model"
+dir = "{{config_root}}"
+run = "docker compose exec ollama ollama pull ${MODEL:-llama3.1:8b}"
