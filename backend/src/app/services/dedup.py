@@ -44,8 +44,8 @@ class DedupService:
             WHERE is_duplicate = false
               AND embedding IS NOT NULL
               AND published_at > now() - make_interval(hours => :window_hours)
-              AND 1 - (embedding <=> :target_embedding::vector) > :threshold
-            ORDER BY embedding <=> :target_embedding::vector
+              AND 1 - (embedding <=> cast(:target_embedding AS vector)) > :threshold
+            ORDER BY embedding <=> cast(:target_embedding AS vector)
             LIMIT 1
         """)
 

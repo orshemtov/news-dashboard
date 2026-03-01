@@ -5,15 +5,81 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import Select, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db import get_db
 from app.models.article import Article
-from app.schemas.article import ArticleDetail, ArticleListResponse, ArticleResponse
+from app.schemas.article import (
+    ArticleDetail,
+    ArticleListResponse,
+    ArticleResponse,
+    FacetsResponse,
+    FacetValue,
+)
 from app.services.events import event_bus
 
 router = APIRouter(tags=["articles"])
+
+
+# ------------------------------------------------------------------
+# Shared filter builder
+# ------------------------------------------------------------------
+
+
+def _apply_filters(
+    stmt: Select,
+    *,
+    source_type: str | None = None,
+    source_name: str | None = None,
+    language: str | None = None,
+    is_duplicate: bool | None = None,
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
+    sources_include: list[str] | None = None,
+    sources_exclude: list[str] | None = None,
+    languages_include: list[str] | None = None,
+    languages_exclude: list[str] | None = None,
+    forwarded: bool | None = None,
+    exclude_keywords: list[str] | None = None,
+) -> Select:
+    """Apply all supported filters to a SELECT statement."""
+    # Legacy single-value filters
+    if source_type is not None:
+        stmt = stmt.where(Article.source_type == source_type)
+    if source_name is not None:
+        stmt = stmt.where(Article.source_name == source_name)
+    if language is not None:
+        stmt = stmt.where(Article.language == language)
+    if is_duplicate is not None:
+        stmt = stmt.where(Article.is_duplicate == is_duplicate)
+    if from_date is not None:
+        stmt = stmt.where(Article.published_at >= from_date)
+    if to_date is not None:
+        stmt = stmt.where(Article.published_at <= to_date)
+
+    # Facet-style multi-value filters
+    if sources_include:
+        stmt = stmt.where(Article.source_name.in_(sources_include))
+    if sources_exclude:
+        stmt = stmt.where(Article.source_name.notin_(sources_exclude))
+    if languages_include:
+        stmt = stmt.where(Article.language.in_(languages_include))
+    if languages_exclude:
+        stmt = stmt.where(Article.language.notin_(languages_exclude))
+    if forwarded is not None:
+        if forwarded:
+            stmt = stmt.where(Article.metadata_["forwarded"].as_boolean().is_(True))
+        else:
+            stmt = stmt.where(Article.metadata_["forwarded"].as_boolean().isnot(True))
+
+    # Keyword exclusion
+    if exclude_keywords:
+        for kw in exclude_keywords:
+            pattern = f"%{kw}%"
+            stmt = stmt.where(~Article.content.ilike(pattern))
+
+    return stmt
 
 
 # ------------------------------------------------------------------
@@ -63,6 +129,121 @@ async def article_stream() -> StreamingResponse:
 
 
 # ------------------------------------------------------------------
+# Facets
+# ------------------------------------------------------------------
+
+
+@router.get("/facets", response_model=FacetsResponse)
+async def get_facets(
+    # All the same filter params so facet counts reflect current filters
+    source_type: str | None = None,
+    source_name: str | None = None,
+    language: str | None = None,
+    is_duplicate: bool | None = None,
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
+    sources_include: list[str] | None = Query(None),
+    sources_exclude: list[str] | None = Query(None),
+    languages_include: list[str] | None = Query(None),
+    languages_exclude: list[str] | None = Query(None),
+    forwarded: bool | None = None,
+    exclude_keywords: list[str] | None = Query(None),
+    db: AsyncSession = Depends(get_db),
+) -> FacetsResponse:
+    """Return aggregated facet counts using cross-dimensional filtering.
+
+    Each facet dimension's counts are computed with all filters applied
+    EXCEPT that dimension's own include/exclude filter.  This is the
+    standard Datadog / Elasticsearch behaviour – selecting a source
+    narrows language & forwarded counts but still shows all sources
+    with their (cross-filtered) counts.
+    """
+
+    # --- Source facet: apply all filters EXCEPT source include/exclude ---
+    source_base = _apply_filters(
+        select(Article),
+        source_type=source_type,
+        source_name=source_name,
+        language=language,
+        is_duplicate=is_duplicate,
+        from_date=from_date,
+        to_date=to_date,
+        exclude_keywords=exclude_keywords,
+        languages_include=languages_include,
+        languages_exclude=languages_exclude,
+        forwarded=forwarded,
+    ).subquery()
+
+    source_stmt = (
+        select(source_base.c.source_name, func.count().label("cnt"))
+        .group_by(source_base.c.source_name)
+        .order_by(func.count().desc())
+    )
+    source_result = await db.execute(source_stmt)
+    sources = [FacetValue(value=row.source_name, count=row.cnt) for row in source_result.all()]
+
+    # --- Language facet: apply all filters EXCEPT language include/exclude ---
+    lang_base = _apply_filters(
+        select(Article),
+        source_type=source_type,
+        source_name=source_name,
+        language=language,
+        is_duplicate=is_duplicate,
+        from_date=from_date,
+        to_date=to_date,
+        exclude_keywords=exclude_keywords,
+        sources_include=sources_include,
+        sources_exclude=sources_exclude,
+        forwarded=forwarded,
+    ).subquery()
+
+    lang_stmt = (
+        select(
+            func.coalesce(lang_base.c.language, "unknown").label("lang"),
+            func.count().label("cnt"),
+        )
+        .group_by("lang")
+        .order_by(func.count().desc())
+    )
+    lang_result = await db.execute(lang_stmt)
+    languages = [FacetValue(value=row.lang, count=row.cnt) for row in lang_result.all()]
+
+    # --- Forwarded facet: apply all filters EXCEPT forwarded ---
+    fwd_base = _apply_filters(
+        select(Article),
+        source_type=source_type,
+        source_name=source_name,
+        language=language,
+        is_duplicate=is_duplicate,
+        from_date=from_date,
+        to_date=to_date,
+        exclude_keywords=exclude_keywords,
+        sources_include=sources_include,
+        sources_exclude=sources_exclude,
+        languages_include=languages_include,
+        languages_exclude=languages_exclude,
+    ).subquery()
+
+    fwd_expr = case(
+        (fwd_base.c.metadata["forwarded"].as_boolean().is_(True), "true"),
+        else_="false",
+    ).label("fwd")
+    fwd_stmt = (
+        select(fwd_expr, func.count().label("cnt"))
+        .group_by(fwd_expr)
+        .order_by(func.count().desc())
+    )
+    fwd_result = await db.execute(fwd_stmt)
+    forwarded_facet = [FacetValue(value=row.fwd, count=row.cnt) for row in fwd_result.all()]
+
+    return FacetsResponse(
+        sources=sources,
+        languages=languages,
+        forwarded=forwarded_facet,
+    )
+
+
+# ------------------------------------------------------------------
 # CRUD routes
 # ------------------------------------------------------------------
 
@@ -77,23 +258,31 @@ async def list_articles(
     is_duplicate: bool | None = None,
     from_date: datetime | None = None,
     to_date: datetime | None = None,
+    sources_include: list[str] | None = Query(None),
+    sources_exclude: list[str] | None = Query(None),
+    languages_include: list[str] | None = Query(None),
+    languages_exclude: list[str] | None = Query(None),
+    forwarded: bool | None = None,
+    exclude_keywords: list[str] | None = Query(None),
     db: AsyncSession = Depends(get_db),
 ) -> ArticleListResponse:
     """List articles with pagination and filtering."""
     base = select(Article)
-
-    if source_type is not None:
-        base = base.where(Article.source_type == source_type)
-    if source_name is not None:
-        base = base.where(Article.source_name == source_name)
-    if language is not None:
-        base = base.where(Article.language == language)
-    if is_duplicate is not None:
-        base = base.where(Article.is_duplicate == is_duplicate)
-    if from_date is not None:
-        base = base.where(Article.published_at >= from_date)
-    if to_date is not None:
-        base = base.where(Article.published_at <= to_date)
+    base = _apply_filters(
+        base,
+        source_type=source_type,
+        source_name=source_name,
+        language=language,
+        is_duplicate=is_duplicate,
+        from_date=from_date,
+        to_date=to_date,
+        sources_include=sources_include,
+        sources_exclude=sources_exclude,
+        languages_include=languages_include,
+        languages_exclude=languages_exclude,
+        forwarded=forwarded,
+        exclude_keywords=exclude_keywords,
+    )
 
     # Total count
     count_result = await db.execute(select(func.count()).select_from(base.subquery()))

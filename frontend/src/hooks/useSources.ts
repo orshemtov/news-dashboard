@@ -9,6 +9,7 @@ import {
   testSource,
   ingestSource,
   searchTelegramChannels,
+  getChannelSuggestions,
 } from '@/api/client';
 
 export function useSources() {
@@ -79,5 +80,13 @@ export function useSearchTelegramChannels(query: string) {
     queryFn: () => searchTelegramChannels(query),
     enabled: query.trim().length >= 2,
     staleTime: 30_000,
+  });
+}
+
+export function useChannelSuggestions() {
+  return useQuery({
+    queryKey: ['channelSuggestions'],
+    queryFn: () => getChannelSuggestions(),
+    staleTime: 5 * 60 * 1000, // 5 minutes
   });
 }

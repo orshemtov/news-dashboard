@@ -57,3 +57,19 @@ class ArticleListResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
+
+# ---------------------------------------------------------------------------
+# Facets
+# ---------------------------------------------------------------------------
+
+
+class FacetValue(BaseModel):
+    value: str
+    count: int
+
+
+class FacetsResponse(BaseModel):
+    sources: list[FacetValue]
+    languages: list[FacetValue]
+    forwarded: list[FacetValue]

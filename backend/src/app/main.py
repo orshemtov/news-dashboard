@@ -10,7 +10,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from loguru import logger
 
 from app.config import get_settings
-from app.db.session import async_session_factory
 from app.services.events import event_bus
 from app.services.ingestion import ingest_all_sources
 
@@ -102,9 +101,8 @@ async def _polling_loop(interval: int) -> None:
     while True:
         pending_events = []
         try:
-            async with async_session_factory() as db, db.begin():
-                summary, pending_events = await ingest_all_sources(db)
-            # Transaction committed – now safe to notify SSE clients
+            summary, pending_events = await ingest_all_sources()
+            # Each source committed independently – now safe to notify SSE clients
             for event in pending_events:
                 event_bus.publish(event)
             if summary:

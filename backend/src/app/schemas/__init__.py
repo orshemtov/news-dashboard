@@ -4,9 +4,12 @@ from app.schemas.article import (
     ArticleDetail,
     ArticleListResponse,
     ArticleResponse,
+    FacetsResponse,
+    FacetValue,
 )
 from app.schemas.search import SearchRequest, SearchResponse
 from app.schemas.source import (
+    ChannelSuggestion,
     SourceBase,
     SourceCreate,
     SourcePreset,
@@ -23,7 +26,10 @@ __all__ = [
     "ArticleDetail",
     "ArticleListResponse",
     "ArticleResponse",
+    "ChannelSuggestion",
     "DashboardStats",
+    "FacetsResponse",
+    "FacetValue",
     "SearchRequest",
     "SearchResponse",
     "SourceBase",

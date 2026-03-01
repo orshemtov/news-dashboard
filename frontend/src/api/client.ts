@@ -2,7 +2,9 @@ import axios from 'axios';
 import type {
   ArticleDetail,
   ArticleListResponse,
+  ChannelSuggestion,
   DashboardStats,
+  FacetsResponse,
   SearchRequest,
   SearchResponse,
   Source,
@@ -16,6 +18,10 @@ import type {
 const api = axios.create({
   baseURL: '/api',
   headers: { 'Content-Type': 'application/json' },
+  // FastAPI expects repeated query params for arrays: ?key=v1&key=v2
+  paramsSerializer: {
+    indexes: null,
+  },
 });
 
 // ---------------------------------------------------------------------------
@@ -31,10 +37,20 @@ export interface ArticleListParams {
   is_duplicate?: boolean;
   from_date?: string;
   to_date?: string;
+  // Facet-style filters
+  sources_include?: string[];
+  sources_exclude?: string[];
+  languages_include?: string[];
+  languages_exclude?: string[];
+  forwarded?: boolean;
+  exclude_keywords?: string[];
 }
 
 export const getArticles = (params?: ArticleListParams) =>
   api.get<ArticleListResponse>('/articles', { params }).then((r) => r.data);
+
+export const getFacets = (params?: Omit<ArticleListParams, 'page' | 'page_size'>) =>
+  api.get<FacetsResponse>('/articles/facets', { params }).then((r) => r.data);
 
 export const getArticle = (id: string) =>
   api.get<ArticleDetail>(`/articles/${id}`).then((r) => r.data);
@@ -76,6 +92,9 @@ export interface TelegramChannelResult {
 
 export const searchTelegramChannels = (query: string) =>
   api.get<TelegramChannelResult[]>('/sources/telegram/search', { params: { query } }).then((r) => r.data);
+
+export const getChannelSuggestions = (topK?: number) =>
+  api.get<ChannelSuggestion[]>('/sources/suggestions', { params: topK ? { top_k: topK } : {} }).then((r) => r.data);
 
 // ---------------------------------------------------------------------------
 // Search

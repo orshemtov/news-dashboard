@@ -11,6 +11,7 @@ from app.db import get_db
 from app.db.session import async_session_factory
 from app.models.source import Source
 from app.schemas.source import (
+    ChannelSuggestion,
     SourceCreate,
     SourcePreset,
     SourceResponse,
@@ -122,6 +123,29 @@ async def create_source(
 async def get_presets() -> list[SourcePreset]:
     """Return preset source configurations for quick setup."""
     return _PRESETS
+
+
+@router.get("/suggestions", response_model=list[ChannelSuggestion])
+async def get_suggestions(
+    top_k: int = 20,
+    db: AsyncSession = Depends(get_db),
+) -> list[ChannelSuggestion]:
+    """Suggest new Telegram channels based on the user's reading interests.
+
+    Computes a mean embedding from recent articles, then ranks the curated
+    channel catalog by cosine similarity to that interest vector.
+    """
+    from app.services.suggestions import get_channel_suggestions
+
+    try:
+        results = await get_channel_suggestions(db, top_k=top_k)
+        return [ChannelSuggestion(**r) for r in results]
+    except Exception:
+        logger.exception("Channel suggestion generation failed")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to generate channel suggestions.",
+        ) from None
 
 
 @router.get("/{source_id}", response_model=SourceResponse)

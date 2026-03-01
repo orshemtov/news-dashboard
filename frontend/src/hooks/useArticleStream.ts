@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { useQueryClient } from '@tanstack/react-query';
+import { useQueryClient, type InfiniteData } from '@tanstack/react-query';
 import type { Article, ArticleListResponse } from '@/types';
 
 /**
  * Subscribes to the SSE endpoint at /api/articles/stream.
  * When a "new_articles" event arrives, prepends the full article data
- * directly into the React Query cache — no refetch needed.
+ * directly into the React Query infinite cache — no refetch needed.
  *
  * Returns a Set of article IDs that arrived via SSE (for entrance
  * animations) and a callback to clear an ID once the animation ends.
@@ -46,21 +46,38 @@ export function useArticleStream() {
         return next;
       });
 
-      // Prepend new articles into every cached ArticleListResponse
-      queryClient.setQueriesData<ArticleListResponse>(
+      // Prepend new articles into the first page of every cached infinite query
+      queryClient.setQueriesData<InfiniteData<ArticleListResponse>>(
         { queryKey: ['articles'] },
         (old) => {
-          if (!old) return old;
+          if (!old || !old.pages.length) return old;
 
-          // Deduplicate: skip articles already in cache
-          const existingIds = new Set(old.items.map((a) => a.id));
+          const firstPage = old.pages[0];
+
+          // Deduplicate: collect all existing IDs across all pages
+          const existingIds = new Set(
+            old.pages.flatMap((p) => p.items.map((a) => a.id)),
+          );
           const newItems = articles.filter((a) => !existingIds.has(a.id));
           if (newItems.length === 0) return old;
 
+          // Prepend to the first page
+          const updatedFirstPage: ArticleListResponse = {
+            ...firstPage,
+            items: [...newItems, ...firstPage.items],
+            total: firstPage.total + newItems.length,
+          };
+
+          // Update total in all pages so pagination calculates correctly
+          const updatedPages = old.pages.map((p, i) =>
+            i === 0
+              ? updatedFirstPage
+              : { ...p, total: p.total + newItems.length },
+          );
+
           return {
             ...old,
-            items: [...newItems, ...old.items],
-            total: old.total + newItems.length,
+            pages: updatedPages,
           };
         },
       );

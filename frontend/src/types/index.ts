@@ -100,6 +100,19 @@ export interface SourceTestResponse {
 }
 
 // ---------------------------------------------------------------------------
+// Channel Suggestions
+// ---------------------------------------------------------------------------
+
+export interface ChannelSuggestion {
+  username: string;
+  name: string;
+  description: string;
+  language: string;
+  tags: string[];
+  similarity_score: number | null;
+}
+
+// ---------------------------------------------------------------------------
 // Search
 // ---------------------------------------------------------------------------
 
@@ -114,6 +127,13 @@ export interface SearchRequest {
   include_duplicates?: boolean;
   page?: number;
   page_size?: number;
+  // Facet-style filters
+  sources_include?: string[];
+  sources_exclude?: string[];
+  languages_include?: string[];
+  languages_exclude?: string[];
+  forwarded?: boolean;
+  exclude_keywords?: string[];
 }
 
 export interface SearchResponse {
@@ -121,6 +141,21 @@ export interface SearchResponse {
   total: number;
   query: string;
   mode: string;
+}
+
+// ---------------------------------------------------------------------------
+// Facets
+// ---------------------------------------------------------------------------
+
+export interface FacetValue {
+  value: string;
+  count: number;
+}
+
+export interface FacetsResponse {
+  sources: FacetValue[];
+  languages: FacetValue[];
+  forwarded: FacetValue[];
 }
 
 // ---------------------------------------------------------------------------

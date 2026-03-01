@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.db.session import async_session_factory
 from app.ingestors import RawArticle, TelegramIngestor
 from app.ingestors.base import BaseIngestor
 from app.models import Article, Source
@@ -216,6 +217,26 @@ async def ingest_source(
                 source.name,
                 len(embeddings),
             )
+
+            # Semantic dedup: check each new article against existing articles
+            from app.services.dedup import DedupService
+
+            dedup_svc = DedupService(db)
+            dedup_count = 0
+            for article in new_articles:
+                if article.embedding is None:
+                    continue
+                similar = await dedup_svc.check_semantic_duplicate(article.embedding)
+                if similar is not None:
+                    article.is_duplicate = True
+                    article.dedup_cluster_id = await dedup_svc.find_or_create_cluster(similar)
+                    dedup_count += 1
+            if dedup_count:
+                logger.info(
+                    "Source {}: marked {} articles as semantic duplicates",
+                    source.name,
+                    dedup_count,
+                )
         except Exception:
             logger.warning(
                 "Source {}: embedding generation failed, articles stored without embeddings",
@@ -249,10 +270,11 @@ async def ingest_source(
     return new_count, pending_event
 
 
-async def ingest_all_sources(
-    db: AsyncSession,
-) -> tuple[dict[str, int], list[NewArticlesEvent]]:
+async def ingest_all_sources() -> tuple[dict[str, int], list[NewArticlesEvent]]:
     """Fetch all enabled sources and ingest each one.
+
+    Each source is ingested in its **own** database transaction so that a
+    failure in one source does not poison the others.
 
     Only sources whose ``poll_interval_seconds`` has elapsed since
     ``last_polled_at`` are included. This respects per-source polling
@@ -260,32 +282,36 @@ async def ingest_all_sources(
 
     Returns ``(summary, pending_events)`` where *summary* maps source
     names to new-article counts and *pending_events* should be published
-    **after** the transaction commits.
+    **after** the database transactions have committed.
     """
     now = datetime.now(tz=UTC)
-    result = await db.execute(select(Source).where(Source.enabled.is_(True)))
-    sources = list(result.scalars().all())
 
-    if not sources:
-        logger.info("No enabled sources found — nothing to ingest.")
-        return {}, []
+    # Read the list of sources in a short-lived read-only session.
+    async with async_session_factory() as db:
+        result = await db.execute(select(Source).where(Source.enabled.is_(True)))
+        sources = list(result.scalars().all())
 
-    # Filter to sources that are due for a poll
-    due_sources: list[Source] = []
-    for source in sources:
-        if source.last_polled_at is None:
-            due_sources.append(source)
-            continue
-        elapsed = (now - source.last_polled_at).total_seconds()
-        if elapsed >= source.poll_interval_seconds:
-            due_sources.append(source)
-        else:
-            logger.debug(
-                "Source {}: skipping, polled {:.0f}s ago (interval={}s)",
-                source.name,
-                elapsed,
-                source.poll_interval_seconds,
-            )
+        if not sources:
+            logger.info("No enabled sources found — nothing to ingest.")
+            return {}, []
+
+        # Filter to sources that are due for a poll.  Capture lightweight
+        # identifiers so we can open independent sessions below.
+        due_sources: list[tuple[str, str]] = []  # (source_id_hex, source_name)
+        for source in sources:
+            if source.last_polled_at is None:
+                due_sources.append((str(source.id), source.name))
+                continue
+            elapsed = (now - source.last_polled_at).total_seconds()
+            if elapsed >= source.poll_interval_seconds:
+                due_sources.append((str(source.id), source.name))
+            else:
+                logger.debug(
+                    "Source {}: skipping, polled {:.0f}s ago (interval={}s)",
+                    source.name,
+                    elapsed,
+                    source.poll_interval_seconds,
+                )
 
     if not due_sources:
         logger.debug("No sources due for polling this cycle.")
@@ -293,15 +319,21 @@ async def ingest_all_sources(
 
     summary: dict[str, int] = {}
     pending_events: list[NewArticlesEvent] = []
-    for source in due_sources:
+
+    for source_id, source_name in due_sources:
         try:
-            count, event = await ingest_source(source, db)
+            async with async_session_factory() as db, db.begin():
+                source = await db.get(Source, source_id)
+                if source is None:
+                    logger.warning("Source {} disappeared, skipping", source_name)
+                    continue
+                count, event = await ingest_source(source, db)
+            # Transaction committed — safe to collect the event.
+            summary[source_name] = count
+            if event is not None:
+                pending_events.append(event)
         except Exception:
-            logger.exception("Unexpected error ingesting source {}", source.name)
-            count = 0
-            event = None
-        summary[source.name] = count
-        if event is not None:
-            pending_events.append(event)
+            logger.exception("Unexpected error ingesting source {}", source_name)
+            summary[source_name] = 0
 
     return summary, pending_events

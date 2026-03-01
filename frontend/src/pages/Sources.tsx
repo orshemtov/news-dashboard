@@ -5,8 +5,9 @@ import {
   useUpdateSource,
   useDeleteSource,
   useSearchTelegramChannels,
+  useChannelSuggestions,
 } from '@/hooks/useSources';
-import type { Source } from '@/types';
+import type { Source, ChannelSuggestion } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +18,9 @@ import {
   X,
   Send as TelegramIcon,
   Plus,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 
 export default function Sources() {
@@ -29,6 +33,11 @@ export default function Sources() {
   const [searchQuery, setSearchQuery] = useState('');
   const { data: searchResults, isLoading: isSearching } =
     useSearchTelegramChannels(searchQuery);
+
+  // Channel suggestions
+  const { data: suggestions, isLoading: isSuggestionsLoading } =
+    useChannelSuggestions();
+  const [showAllSuggestions, setShowAllSuggestions] = useState(false);
 
   const sourceList = sources ?? [];
   const existingChannels = new Set(
@@ -55,8 +64,24 @@ export default function Sources() {
     });
   };
 
+  const handleAddSuggestion = (suggestion: ChannelSuggestion) => {
+    createSource.mutate({
+      name: suggestion.name,
+      source_type: 'telegram',
+      config: { channel: suggestion.username },
+    });
+  };
+
+  // Filter out already-added channels from suggestions
+  const filteredSuggestions = (suggestions ?? []).filter(
+    (s) => !existingChannels.has(s.username.toLowerCase()),
+  );
+  const visibleSuggestions = showAllSuggestions
+    ? filteredSuggestions
+    : filteredSuggestions.slice(0, 6);
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -231,7 +256,7 @@ export default function Sources() {
         </div>
       )}
 
-      {/* Error tooltip on hover (optional enhancement — show via title) */}
+      {/* Error messages */}
       {sourceList
         .filter((s) => s.error_message)
         .map((s) => (
@@ -239,6 +264,113 @@ export default function Sources() {
             {s.name}: {s.error_message}
           </p>
         ))}
+
+      {/* ── Suggested Channels ──────────────────────────────────────── */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="size-4 text-amber-500" />
+          <h3 className="text-sm font-semibold">Suggested for you</h3>
+          <span className="text-xs text-muted-foreground">
+            Based on your reading interests
+          </span>
+        </div>
+
+        {isSuggestionsLoading && (
+          <div className="flex items-center justify-center py-6">
+            <Loader2 className="size-4 animate-spin text-muted-foreground" />
+            <span className="ml-2 text-sm text-muted-foreground">
+              Analyzing your interests...
+            </span>
+          </div>
+        )}
+
+        {!isSuggestionsLoading && filteredSuggestions.length === 0 && (
+          <p className="py-4 text-center text-sm text-muted-foreground">
+            No suggestions available. Add some sources and let articles
+            accumulate to get personalized recommendations.
+          </p>
+        )}
+
+        {!isSuggestionsLoading && filteredSuggestions.length > 0 && (
+          <>
+            <div className="grid gap-2 sm:grid-cols-2">
+              {visibleSuggestions.map((suggestion) => (
+                <div
+                  key={suggestion.username}
+                  className="flex flex-col gap-2 rounded-md border border-border p-3"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5">
+                        <TelegramIcon className="size-3.5 shrink-0 text-blue-500" />
+                        <span className="text-sm font-medium truncate">
+                          {suggestion.name}
+                        </span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        @{suggestion.username}
+                      </span>
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 shrink-0"
+                      disabled={createSource.isPending}
+                      onClick={() => handleAddSuggestion(suggestion)}
+                    >
+                      <Plus className="size-3" />
+                      Add
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground line-clamp-2">
+                    {suggestion.description}
+                  </p>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+                      {suggestion.language.toUpperCase()}
+                    </Badge>
+                    {suggestion.tags.slice(0, 3).map((tag) => (
+                      <Badge
+                        key={tag}
+                        variant="outline"
+                        className="text-[10px] px-1.5 py-0"
+                      >
+                        {tag}
+                      </Badge>
+                    ))}
+                    {suggestion.similarity_score != null && (
+                      <span className="ml-auto text-[10px] text-muted-foreground">
+                        {Math.round(suggestion.similarity_score * 100)}% match
+                      </span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {filteredSuggestions.length > 6 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full text-xs"
+                onClick={() => setShowAllSuggestions(!showAllSuggestions)}
+              >
+                {showAllSuggestions ? (
+                  <>
+                    <ChevronUp className="size-3 mr-1" />
+                    Show less
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown className="size-3 mr-1" />
+                    Show {filteredSuggestions.length - 6} more suggestions
+                  </>
+                )}
+              </Button>
+            )}
+          </>
+        )}
+      </div>
     </div>
   );
 }

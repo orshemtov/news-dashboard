@@ -52,3 +52,13 @@ class SourcePreset(BaseModel):
     config: dict
     category: str  # "israeli", "foreign", "telegram"
     description: str
+
+
+# Channel suggestion
+class ChannelSuggestion(BaseModel):
+    username: str
+    name: str
+    description: str
+    language: str
+    tags: list[str] = []
+    similarity_score: float | None = None

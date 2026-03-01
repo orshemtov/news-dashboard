@@ -15,6 +15,13 @@ class SearchRequest(BaseModel):
     from_date: datetime | None = None
     to_date: datetime | None = None
     include_duplicates: bool = False
+    # Facet-style filters
+    sources_include: list[str] | None = None
+    sources_exclude: list[str] | None = None
+    languages_include: list[str] | None = None
+    languages_exclude: list[str] | None = None
+    forwarded: bool | None = None
+    exclude_keywords: list[str] | None = None
     page: int = 1
     page_size: int = 20
 

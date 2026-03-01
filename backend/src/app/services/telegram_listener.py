@@ -112,13 +112,46 @@ async def start_realtime_listener(client: TelegramClient) -> None:
         # Persist within its own DB session
         article_dict: dict | None = None
         try:
+            # Generate embedding *before* DB work so we can do semantic dedup
+            # in a single transaction.
+            embedding: list[float] | None = None
+            try:
+                from app.services.embedding import EmbeddingService
+
+                emb_service = EmbeddingService()
+                embed_text = f"\n{content[:1000]}"
+                embeddings = await emb_service.embed_batch([embed_text])
+                if embeddings:
+                    embedding = embeddings[0]
+            except Exception:
+                logger.debug(
+                    "Embedding generation failed for real-time article, will store without embedding"
+                )
+
             async with async_session_factory() as db, db.begin():
-                # Check dedup
+                # Check exact dedup (hash)
                 existing = await db.execute(
                     select(Article.id).where(Article.dedup_hash == dedup_hash).limit(1)
                 )
                 if existing.scalar_one_or_none() is not None:
                     return
+
+                # Check semantic dedup (embedding similarity)
+                is_duplicate = False
+                dedup_cluster_id = None
+                if embedding is not None:
+                    from app.services.dedup import DedupService
+
+                    dedup_svc = DedupService(db)
+                    similar = await dedup_svc.check_semantic_duplicate(embedding)
+                    if similar is not None:
+                        is_duplicate = True
+                        dedup_cluster_id = await dedup_svc.find_or_create_cluster(similar)
+                        logger.info(
+                            "Real-time: semantic duplicate detected for msg {} (similar to {})",
+                            msg.id,
+                            similar.id,
+                        )
 
                 fwd_meta: dict = {}
                 if msg.forward is not None:
@@ -154,6 +187,9 @@ async def start_realtime_listener(client: TelegramClient) -> None:
                     metadata_=fwd_meta,
                     media_attachments=media_attachments,
                     dedup_hash=dedup_hash,
+                    embedding=embedding,
+                    is_duplicate=is_duplicate,
+                    dedup_cluster_id=dedup_cluster_id,
                 )
                 db.add(article)
 
@@ -166,26 +202,6 @@ async def start_realtime_listener(client: TelegramClient) -> None:
                 if source_row:
                     source_row.article_count = (source_row.article_count or 0) + 1
                     source_row.error_message = None
-
-            # Generate embedding in the background (non-blocking)
-            try:
-                from app.services.embedding import EmbeddingService
-
-                emb_service = EmbeddingService()
-                text = f"\n{content[:1000]}"
-                embeddings = await emb_service.embed_batch([text])
-                if embeddings:
-                    async with async_session_factory() as db, db.begin():
-                        result = await db.execute(
-                            select(Article).where(Article.dedup_hash == dedup_hash)
-                        )
-                        art = result.scalar_one_or_none()
-                        if art:
-                            art.embedding = embeddings[0]
-            except Exception:
-                logger.debug(
-                    "Embedding generation failed for real-time article, will be filled on next poll"
-                )
 
             # Publish event to SSE bus
             if article_dict:

@@ -38,6 +38,25 @@ class SearchService:
             stmt = stmt.where(Article.published_at <= request.to_date)
         if not request.include_duplicates:
             stmt = stmt.where(Article.is_duplicate == False)  # noqa: E712
+
+        # Facet-style filters
+        if request.sources_include:
+            stmt = stmt.where(Article.source_name.in_(request.sources_include))
+        if request.sources_exclude:
+            stmt = stmt.where(Article.source_name.notin_(request.sources_exclude))
+        if request.languages_include:
+            stmt = stmt.where(Article.language.in_(request.languages_include))
+        if request.languages_exclude:
+            stmt = stmt.where(Article.language.notin_(request.languages_exclude))
+        if request.forwarded is not None:
+            if request.forwarded:
+                stmt = stmt.where(Article.metadata_["forwarded"].as_boolean().is_(True))
+            else:
+                stmt = stmt.where(Article.metadata_["forwarded"].as_boolean().isnot(True))
+        if request.exclude_keywords:
+            for kw in request.exclude_keywords:
+                stmt = stmt.where(Article.content.not_ilike(f"%{kw}%"))
+
         return stmt
 
     # ------------------------------------------------------------------
@@ -199,6 +218,22 @@ class SearchService:
             clauses.append("AND published_at <= :to_date")
         if not request.include_duplicates:
             clauses.append("AND is_duplicate = false")
+
+        # Facet-style filters
+        if request.sources_include:
+            clauses.append("AND source_name = ANY(:sources_include)")
+        if request.sources_exclude:
+            clauses.append("AND source_name != ALL(:sources_exclude)")
+        if request.languages_include:
+            clauses.append("AND language = ANY(:languages_include)")
+        if request.languages_exclude:
+            clauses.append("AND language != ALL(:languages_exclude)")
+        if request.forwarded is not None:
+            clauses.append("AND (metadata_->>'forwarded')::boolean = :forwarded")
+        if request.exclude_keywords:
+            for i, _ in enumerate(request.exclude_keywords):
+                clauses.append(f"AND content NOT ILIKE :exclude_kw_{i}")
+
         return "\n".join(clauses)
 
     @staticmethod
@@ -218,4 +253,20 @@ class SearchService:
             params["from_date"] = request.from_date
         if request.to_date:
             params["to_date"] = request.to_date
+
+        # Facet-style filters
+        if request.sources_include:
+            params["sources_include"] = request.sources_include
+        if request.sources_exclude:
+            params["sources_exclude"] = request.sources_exclude
+        if request.languages_include:
+            params["languages_include"] = request.languages_include
+        if request.languages_exclude:
+            params["languages_exclude"] = request.languages_exclude
+        if request.forwarded is not None:
+            params["forwarded"] = request.forwarded
+        if request.exclude_keywords:
+            for i, kw in enumerate(request.exclude_keywords):
+                params[f"exclude_kw_{i}"] = f"%{kw}%"
+
         return params

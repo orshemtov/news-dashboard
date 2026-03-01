@@ -1,15 +1,29 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import {
+  useQuery,
+  useInfiniteQuery,
+  useMutation,
+  useQueryClient,
+} from '@tanstack/react-query';
 import {
   getArticles,
   getArticle,
   deleteArticle,
   type ArticleListParams,
 } from '@/api/client';
+import type { ArticleListResponse } from '@/types';
 
-export function useArticles(params?: ArticleListParams) {
-  return useQuery({
+const PAGE_SIZE = 20;
+
+export function useArticles(params?: Omit<ArticleListParams, 'page' | 'page_size'>) {
+  return useInfiniteQuery<ArticleListResponse>({
     queryKey: ['articles', params],
-    queryFn: () => getArticles(params),
+    queryFn: ({ pageParam }) =>
+      getArticles({ ...params, page: pageParam as number, page_size: PAGE_SIZE }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      const totalPages = Math.ceil(lastPage.total / PAGE_SIZE);
+      return lastPage.page < totalPages ? lastPage.page + 1 : undefined;
+    },
   });
 }
 
