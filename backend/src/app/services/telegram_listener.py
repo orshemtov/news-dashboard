@@ -15,6 +15,7 @@ from sqlalchemy import select
 from telethon import TelegramClient, events
 
 from app.db.session import async_session_factory
+from app.ingestors.telegram import sanitize_channel
 from app.models import Article, Source
 from app.services.events import NewArticlesEvent, article_to_sse_dict, event_bus
 
@@ -43,8 +44,9 @@ async def start_realtime_listener(client: TelegramClient) -> None:
     for source in sources:
         channel = (source.config or {}).get("channel", "")
         if channel:
-            channel_to_source[channel.lower().lstrip("@")] = source
-            chat_ids.append(channel)
+            clean = sanitize_channel(channel)
+            channel_to_source[clean.lower()] = source
+            chat_ids.append(clean)
 
     if not chat_ids:
         logger.info("No Telegram channels configured — real-time listener not started")
@@ -56,8 +58,12 @@ async def start_realtime_listener(client: TelegramClient) -> None:
         try:
             entity = await client.get_entity(channel)
             resolved_entities.append(entity)
-        except Exception:
-            logger.warning("Could not resolve channel '{}' for real-time listener", channel)
+        except Exception as exc:
+            logger.warning(
+                "Could not resolve channel '{}' for real-time listener: {}",
+                channel,
+                exc,
+            )
 
     if not resolved_entities:
         logger.warning("No channels could be resolved — real-time listener not started")

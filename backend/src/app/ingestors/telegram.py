@@ -11,6 +11,24 @@ from app.ingestors.base import BaseIngestor, RawArticle
 
 _DEFAULT_LIMIT = 50
 
+# Regex to strip full t.me URLs down to the bare username
+_TME_URL_RE = re.compile(r"^https?://(?:www\.)?t\.me/", re.IGNORECASE)
+
+
+def sanitize_channel(raw: str) -> str:
+    """Normalise a Telegram channel identifier to a bare username.
+
+    Handles ``@channel``, ``https://t.me/channel``, and plain ``channel``.
+    """
+    value = raw.strip()
+    # Strip t.me URLs first
+    value = _TME_URL_RE.sub("", value)
+    # Remove leading @ if present
+    value = value.lstrip("@")
+    # Strip trailing slashes (from copy-pasted URLs)
+    value = value.rstrip("/")
+    return value
+
 
 class TelegramIngestor(BaseIngestor):
     """Ingestor for Telegram channel messages via Telethon."""
@@ -25,7 +43,7 @@ class TelegramIngestor(BaseIngestor):
     ) -> None:
         super().__init__(source_name, config)
         self._client = client
-        self._channel: str = config.get("channel", "")
+        self._channel: str = sanitize_channel(config.get("channel", ""))
         self._limit: int = config.get("limit", _DEFAULT_LIMIT)
         self._min_id: int = min_id
 
@@ -51,7 +69,11 @@ class TelegramIngestor(BaseIngestor):
         except ValueError:
             return False, (f"Channel '{self._channel}' not found. Check the username or ID.")
         except Exception as exc:
-            return False, f"Failed to resolve channel: {exc}"
+            # Covers UsernameInvalidError and other Telethon RPC errors
+            return False, (
+                f"Channel '{self._channel}' could not be resolved: {exc}. "
+                f"The channel may have been deleted or renamed."
+            )
 
         if entity is None:
             return False, f"Channel '{self._channel}' could not be resolved."
@@ -310,5 +332,5 @@ def _get_author(msg: Any) -> str | None:
 
 def _build_message_url(channel: str, message_id: int) -> str:
     """Build a t.me link to the message."""
-    clean = channel.lstrip("@")
+    clean = sanitize_channel(channel)
     return f"https://t.me/{clean}/{message_id}"
