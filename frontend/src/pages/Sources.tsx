@@ -22,7 +22,22 @@ import {
   Sparkles,
   ChevronDown,
   ChevronUp,
+  AlertCircle,
+  CheckCircle2,
+  Circle,
+  RefreshCw,
 } from 'lucide-react';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
 
 export default function Sources() {
   const { data: sources, isLoading } = useSources();
@@ -245,29 +260,36 @@ export default function Sources() {
                 <span className="text-sm font-medium truncate">
                   {source.name}
                 </span>
-                <Badge
-                  variant={
-                    source.error_message
-                      ? 'destructive'
-                      : source.enabled
-                        ? 'default'
-                        : 'secondary'
-                  }
-                  className="text-[10px] px-1.5 py-0"
-                >
-                  {source.error_message
-                    ? 'Error'
-                    : source.enabled
-                      ? 'Active'
-                      : 'Off'}
-                </Badge>
+                
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {source.error_message ? (
+                    <div className="flex items-center gap-1 rounded-full bg-destructive/10 px-2 py-0.5 text-[10px] font-medium text-destructive">
+                      <AlertCircle className="size-2.5" />
+                      Error
+                    </div>
+                  ) : source.enabled ? (
+                    <div className="flex items-center gap-1 rounded-full bg-emerald-500/10 px-2 py-0.5 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">
+                      <span className="relative flex h-1.5 w-1.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-1.5 w-1.5 bg-emerald-500"></span>
+                      </span>
+                      Active
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1 rounded-full bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+                      <Circle className="size-2.5" />
+                      Off
+                    </div>
+                  )}
+                </div>
+
                 <span className="text-xs text-muted-foreground whitespace-nowrap">
                   {source.article_count} articles
                 </span>
-                <span className="hidden sm:inline text-xs text-muted-foreground whitespace-nowrap">
+                <span className="hidden sm:inline text-xs text-muted-foreground whitespace-nowrap italic">
                   {source.last_polled_at
-                    ? `polled ${new Date(source.last_polled_at).toLocaleString()}`
-                    : 'never polled'}
+                    ? `last sync: ${new Date(source.last_polled_at).toLocaleTimeString()}`
+                    : 'never synced'}
                 </span>
               </div>
 
@@ -275,23 +297,41 @@ export default function Sources() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 text-xs"
+                  className="h-7 text-xs hover:bg-emerald-500/10 hover:text-emerald-600"
                   onClick={() => handleToggleEnabled(source)}
                 >
                   {source.enabled ? 'Disable' : 'Enable'}
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2"
-                  onClick={() => {
-                    if (confirm('Delete this source?')) {
-                      deleteSource.mutate(source.id);
-                    }
-                  }}
-                >
-                  <Trash2 className="size-3.5 text-destructive" />
-                </Button>
+                
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-7 px-2 hover:bg-destructive/10 group"
+                    >
+                      <Trash2 className="size-3.5 text-muted-foreground group-hover:text-destructive" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Source?</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        This will stop ingesting articles from <strong>{source.name}</strong>. 
+                        Existing articles from this source will remain in the database.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        onClick={() => deleteSource.mutate(source.id)}
+                      >
+                        Delete
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
               </div>
             </div>
           ))}

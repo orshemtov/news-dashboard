@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useMemo } from 'react';
 import type { Article } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
@@ -51,14 +51,9 @@ export function ArticleCard({ article, onClick, isNew, onAnimationEnd }: Article
   const photoCount = media.filter((m) => m.type === 'photo').length;
   const videoCount = media.filter((m) => m.type === 'video').length;
 
-  // Video-only articles get inline playback
-  const isVideoOnly = !firstPhoto && !!firstVideo;
-  const [playing, setPlaying] = useState(false);
-  const videoRef = useRef<HTMLVideoElement>(null);
-
-  const handleVideoPlay = (e: React.MouseEvent) => {
+  const handleMediaClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setPlaying(true);
+    onClick();
   };
 
   return (
@@ -90,15 +85,18 @@ export function ArticleCard({ article, onClick, isNew, onAnimationEnd }: Article
           {/* Spacer + external link */}
           <div className="flex-1" />
           {article.url && (
-            <a
-              href={article.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="shrink-0 opacity-0 transition-opacity group-hover:opacity-60 hover:!opacity-100"
-            >
-              <ExternalLink className="size-3.5" />
-            </a>
+            <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+              <span className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-tight">Source</span>
+              <a
+                href={article.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="shrink-0 text-muted-foreground hover:text-foreground"
+              >
+                <ExternalLink className="size-3.5" />
+              </a>
+            </div>
           )}
         </div>
 
@@ -121,8 +119,11 @@ export function ArticleCard({ article, onClick, isNew, onAnimationEnd }: Article
         )}
 
         {/* Media */}
-        {thumbSrc && !isVideoOnly && (
-          <div className="relative mt-3 overflow-hidden rounded-xl border border-border/30">
+        {thumbSrc && (
+          <div 
+            className="relative mt-3 overflow-hidden rounded-xl border border-border/30"
+            onClick={handleMediaClick}
+          >
             <div className="aspect-video w-full bg-muted">
               <img
                 src={thumbSrc}
@@ -134,6 +135,16 @@ export function ArticleCard({ article, onClick, isNew, onAnimationEnd }: Article
                 }}
               />
             </div>
+            
+            {/* Overlay for video indicator */}
+            {firstVideo && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="rounded-full bg-black/60 p-3 transition-transform group-hover:scale-110">
+                  <Play className="size-6 text-white" fill="white" />
+                </div>
+              </div>
+            )}
+
             {/* Video duration overlay */}
             {firstVideo?.duration != null && firstVideo.duration > 0 && (
               <span className="absolute bottom-2 left-2 rounded bg-black/75 px-1.5 py-0.5 text-[11px] font-medium text-white">
@@ -145,63 +156,6 @@ export function ArticleCard({ article, onClick, isNew, onAnimationEnd }: Article
               <span className="absolute top-2 right-2 rounded-full bg-black/70 px-2 py-0.5 text-[11px] font-medium text-white">
                 1/{media.length}
               </span>
-            )}
-          </div>
-        )}
-
-        {/* Video — inline player */}
-        {isVideoOnly && (
-          <div
-            className="relative mt-3 overflow-hidden rounded-xl border border-border/30"
-            onClick={handleVideoPlay}
-          >
-            {playing ? (
-              <video
-                ref={videoRef}
-                src={mediaUrl(firstVideo.url)}
-                controls
-                autoPlay
-                muted
-                className="w-full"
-                style={{ maxHeight: '400px' }}
-                onClick={(e) => e.stopPropagation()}
-              />
-            ) : (
-              <div className="aspect-video w-full bg-muted">
-                {thumbSrc ? (
-                  <img
-                    src={thumbSrc}
-                    alt=""
-                    className="h-full w-full object-contain"
-                    loading="lazy"
-                    onError={(e) => {
-                      (e.target as HTMLImageElement).style.display = 'none';
-                    }}
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-muted">
-                    <Video className="size-8 text-muted-foreground/40" />
-                  </div>
-                )}
-                {/* Play button overlay */}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="rounded-full bg-black/60 p-3 transition-transform group-hover:scale-110">
-                    <Play className="size-6 text-white" fill="white" />
-                  </div>
-                </div>
-                {/* Duration badge */}
-                {firstVideo.duration != null && firstVideo.duration > 0 && (
-                  <span className="absolute bottom-2 left-2 rounded bg-black/75 px-1.5 py-0.5 text-[11px] font-medium text-white">
-                    {formatDuration(firstVideo.duration)}
-                  </span>
-                )}
-                {/* Multi-media count badge */}
-                {media.length > 1 && (
-                  <span className="absolute top-2 right-2 rounded-full bg-black/70 px-2 py-0.5 text-[11px] font-medium text-white">
-                    1/{media.length}
-                  </span>
-                )}
-              </div>
             )}
           </div>
         )}

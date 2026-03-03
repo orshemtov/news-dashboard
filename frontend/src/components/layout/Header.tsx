@@ -35,35 +35,45 @@ export function Header() {
   };
 
   return (
-    <header className="sticky top-0 z-30 border-b border-border/50 bg-background/80 backdrop-blur-xl">
-      <div className="mx-auto flex h-12 max-w-7xl items-center justify-between px-4 sm:px-6">
+    <header className="sticky top-0 z-40 border-b border-border/30 bg-background/60 backdrop-blur-xl">
+      <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-4 sm:px-6">
         {/* Left: branding */}
         <Link to="/" className="flex items-center gap-2 group">
-          <Activity className="size-4 text-primary transition-transform group-hover:scale-110" />
-          <span className="text-[15px] font-semibold tracking-tight">
+          <div className="flex size-7 items-center justify-center rounded-lg bg-primary/10 transition-colors group-hover:bg-primary/20">
+            <Activity className="size-4 text-primary transition-transform group-hover:scale-110" />
+          </div>
+          <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
             Pulse
           </span>
         </Link>
 
-        {/* Right: nav + toggle */}
-        <div className="flex items-center gap-0.5">
+        {/* Desktop Nav */}
+        <div className="hidden md:flex items-center gap-1">
           {navItem('/', <Activity className="size-3.5" />, 'Feed')}
           {navItem('/sources', <Radio className="size-3.5" />, 'Sources')}
-
+          
           <div className="mx-2 h-4 w-px bg-border/50" />
-
+          
           <Button
             variant="ghost"
             size="icon"
-            className="size-7 text-muted-foreground hover:text-foreground"
+            className="size-8 text-muted-foreground hover:text-foreground hover:bg-accent"
             onClick={() => setDark((d) => !d)}
-            aria-label="Toggle dark mode"
+            title="Toggle theme"
           >
-            {dark ? (
-              <Sun className="size-3.5" />
-            ) : (
-              <Moon className="size-3.5" />
-            )}
+            {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
+          </Button>
+        </div>
+
+        {/* Mobile Theme Toggle */}
+        <div className="flex md:hidden items-center">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="size-9 text-muted-foreground hover:text-foreground"
+            onClick={() => setDark((d) => !d)}
+          >
+            {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
           </Button>
         </div>
       </div>

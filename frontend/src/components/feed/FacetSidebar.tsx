@@ -120,7 +120,7 @@ function FacetSection({
                   </span>
                 </button>
 
-                <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                <div className="flex items-center gap-1.5 ml-auto shrink-0 min-w-[3.5rem] justify-end">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -136,7 +136,7 @@ function FacetSection({
                   >
                     <Minus className="size-2.5" strokeWidth={3} />
                   </button>
-                  <span className="tabular-nums text-muted-foreground/50">
+                  <span className="tabular-nums text-muted-foreground/50 w-7 text-right">
                     {count}
                   </span>
                 </div>

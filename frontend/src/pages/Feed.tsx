@@ -17,6 +17,7 @@ import {
   ArrowUpDown,
   PanelLeftClose,
   PanelLeft,
+  Filter,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ArticleCard } from '@/components/feed/ArticleCard';
@@ -27,6 +28,13 @@ import {
   EMPTY_FACET_FILTERS,
   type FacetFilters,
 } from '@/components/feed/FacetSidebar';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from '@/components/ui/sheet';
 
 // ---------------------------------------------------------------------------
 // Time range presets (Datadog-style)
@@ -45,6 +53,21 @@ const TIME_RANGES = [
 ] as const;
 
 type SortOption = 'newest' | 'oldest';
+
+// Deterministic accent color from source name
+const SOURCE_COLORS = [
+  'bg-violet-500', 'bg-indigo-500', 'bg-purple-500', 'bg-fuchsia-500',
+  'bg-blue-500', 'bg-cyan-500', 'bg-teal-500', 'bg-emerald-500',
+  'bg-rose-500', 'bg-amber-500', 'bg-pink-500', 'bg-slate-500',
+];
+
+function sourceColor(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return SOURCE_COLORS[Math.abs(hash) % SOURCE_COLORS.length];
+}
 
 export default function Feed() {
   // SSE: auto-update when new articles arrive
@@ -200,6 +223,52 @@ export default function Feed() {
     facetFilters.sources_exclude.length +
     facetFilters.exclude_keywords.length;
 
+  // 1. Group articles by dedup_hash (Visual Clustering)
+  const groupedArticles = useMemo(() => {
+    const groups: Record<string, Article[]> = {};
+    const singles: Article[] = [];
+
+    sortedArticles.forEach((article) => {
+      if (hideDuplicates && article.dedup_hash) {
+        if (!groups[article.dedup_hash]) {
+          groups[article.dedup_hash] = [];
+        }
+        groups[article.dedup_hash].push(article);
+      } else {
+        singles.push(article);
+      }
+    });
+
+    // For each group, pick the "best" one as lead, or just first
+    const result: { lead: Article; variations: Article[] }[] = [];
+    
+    // Handle singles first
+    singles.forEach(a => result.push({ lead: a, variations: [] }));
+
+    // Handle groups
+    if (hideDuplicates) {
+      Object.values(groups).forEach(group => {
+        // Sort group by has_media, then by content length
+        const sortedGroup = [...group].sort((a, b) => {
+          const aMedia = (a.media_attachments?.length ?? 0) > 0 ? 1 : 0;
+          const bMedia = (b.media_attachments?.length ?? 0) > 0 ? 1 : 0;
+          if (aMedia !== bMedia) return bMedia - aMedia;
+          return (b.content?.length ?? 0) - (a.content?.length ?? 0);
+        });
+        result.push({ lead: sortedGroup[0], variations: sortedGroup.slice(1) });
+      });
+
+      // Sort result by lead's published_at to maintain feed order
+      return result.sort((a, b) => {
+        const aTime = new Date(a.lead.published_at).getTime();
+        const bTime = new Date(b.lead.published_at).getTime();
+        return sortOrder === 'newest' ? bTime - aTime : aTime - bTime;
+      });
+    }
+
+    return result;
+  }, [sortedArticles, hideDuplicates, sortOrder]);
+
   return (
     <div className="flex gap-0">
       {/* Facet Sidebar — always in DOM, width transitions to avoid layout jump */}
@@ -226,7 +295,7 @@ export default function Feed() {
 
         {/* Search Bar */}
         <div className="flex gap-2">
-          {/* Sidebar toggle */}
+          {/* Sidebar toggle (Desktop) */}
           <Button
             variant="outline"
             size="sm"
@@ -245,6 +314,38 @@ export default function Feed() {
               </span>
             )}
           </Button>
+
+          {/* Sidebar Drawer (Mobile) */}
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button
+                variant="outline"
+                size="sm"
+                className="relative h-9 shrink-0 px-2 md:hidden"
+                title="Filters"
+              >
+                <Filter className="size-4" />
+                {activeFacetCount > 0 && (
+                  <span className="absolute -right-1 -top-1 flex size-4 items-center justify-center rounded-full bg-primary text-[10px] font-medium text-primary-foreground">
+                    {activeFacetCount}
+                  </span>
+                )}
+              </Button>
+            </SheetTrigger>
+            <SheetContent side="left" className="w-80 p-0">
+              <SheetHeader className="px-4 py-2 border-b">
+                <SheetTitle className="text-sm font-semibold uppercase tracking-wider">Filters</SheetTitle>
+              </SheetHeader>
+              <div className="h-[calc(100vh-4rem)]">
+                <FacetSidebar
+                  facets={facets}
+                  filters={facetFilters}
+                  onChange={setFacetFilters}
+                  isLoading={facetsLoading}
+                />
+              </div>
+            </SheetContent>
+          </Sheet>
 
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground/60" />
@@ -411,14 +512,32 @@ export default function Feed() {
 
         {/* Article Cards */}
         <div className="mx-auto grid max-w-3xl gap-3">
-          {sortedArticles.map((article) => (
-            <ArticleCard
-              key={article.id}
-              article={article}
-              onClick={() => setSelectedArticle(article)}
-              isNew={newIds.has(article.id)}
-              onAnimationEnd={() => clearNewId(article.id)}
-            />
+          {groupedArticles.map(({ lead, variations }) => (
+            <div key={lead.id} className="space-y-1">
+              <ArticleCard
+                article={lead}
+                onClick={() => setSelectedArticle(lead)}
+                isNew={newIds.has(lead.id)}
+                onAnimationEnd={() => clearNewId(lead.id)}
+              />
+              {variations.length > 0 && (
+                <div className="flex flex-wrap gap-2 px-4 py-1">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50 self-center">
+                    Also from:
+                  </span>
+                  {variations.map((v) => (
+                    <button
+                      key={v.id}
+                      onClick={() => setSelectedArticle(v)}
+                      className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-card/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:border-primary/30 hover:bg-accent/50 hover:text-foreground transition-all"
+                    >
+                      <span className={cn('size-1.5 shrink-0 rounded-full', sourceColor(v.source_name))} />
+                      {v.source_name}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           ))}
         </div>
 
