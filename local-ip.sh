@@ -8,19 +8,14 @@ if [ -z "$LOCAL_IP" ]; then
     LOCAL_IP=$(hostname -I | awk '{print $1}')
 fi
 
+echo "------------------------------------------------"
+echo "Local Dashboard Access"
+echo "------------------------------------------------"
 if [ -n "$LOCAL_IP" ]; then
-    # Ensure .env exists
-    touch .env
-    
-    # Update LOCAL_IP in .env (standard for Docker Compose)
-    if grep -q "LOCAL_IP=" .env; then
-        # Use a temporary file for sed to avoid some macOS vs Linux differences
-        sed "s/LOCAL_IP=.*/LOCAL_IP=$LOCAL_IP/" .env > .env.tmp && mv .env.tmp .env
-    else
-        echo "LOCAL_IP=$LOCAL_IP" >> .env
-    fi
-    echo "LOCAL_IP set to $LOCAL_IP in .env"
+    echo "1. http://news.local  (Should work on iPhone/iPad/Mac)"
+    echo "2. http://news.home   (Requires Router DNS mapping to $LOCAL_IP)"
+    echo "3. http://$LOCAL_IP     (Direct IP access)"
 else
-    echo "Could not detect local IP."
-    exit 1
+    echo "Could not detect local IP, but http://news.local should still work."
 fi
+echo "------------------------------------------------"
