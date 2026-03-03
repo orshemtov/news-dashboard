@@ -3,6 +3,7 @@ media/
 # Environment
 .env
 .env.local
+.env.docker
 
 # OS
 .DS_Store

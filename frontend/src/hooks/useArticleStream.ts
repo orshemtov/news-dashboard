@@ -25,7 +25,8 @@ export function useArticleStream() {
   }, []);
 
   useEffect(() => {
-    const es = new EventSource('/api/articles/stream');
+    const apiBase = import.meta.env.VITE_API_BASE_URL ?? '/api';
+    const es = new EventSource(`${apiBase}/articles/stream`);
     eventSourceRef.current = es;
 
     es.addEventListener('new_articles', (event: MessageEvent) => {

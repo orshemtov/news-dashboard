@@ -1,29 +1,64 @@
+# Usage: docker compose --env-file .env.docker up -d
+# The --env-file flag loads .env.docker for ${POSTGRES_*} variable substitution
+# throughout this file, and env_file: .env.docker on the backend service injects
+# the vars into the container.
+
 services:
   postgres:
     image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-postgres}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
-      POSTGRES_DB: ${POSTGRES_DB:-news_dashboard}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
       interval: 5s
       timeout: 5s
       retries: 5
+
   pgweb:
     image: sosedoff/pgweb:latest
     ports:
       - "8081:8081"
     environment:
-      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-news_dashboard}?sslmode=disable
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}?sslmode=disable
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
 
+  backend:
+    image: ghcr.io/orshemtov/news-dashboard-backend:latest
+    env_file: .env.docker
+    environment:
+      # Assembled from POSTGRES_* — no DATABASE_URL duplication in .env.docker
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      # Write Telegram session file into the persistent volume
+      TELEGRAM_SESSION_NAME: /app/sessions/news_dashboard
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persist Telegram session file across container restarts
+      - telegram_sessions:/app/sessions
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    image: ghcr.io/orshemtov/news-dashboard-frontend:latest
+    environment:
+      BACKEND_URL: http://backend:8000
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
 volumes:
   postgres_data:
+  telegram_sessions:
