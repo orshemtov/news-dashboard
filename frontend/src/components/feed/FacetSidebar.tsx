@@ -33,39 +33,14 @@ interface FacetSidebarProps {
 // Helpers
 // ---------------------------------------------------------------------------
 
-type FacetState = 'include' | 'exclude' | 'none';
+type FacetState = 'include' | 'none';
 
 function getFacetState(
   value: string,
   include: string[],
-  exclude: string[],
 ): FacetState {
   if (include.includes(value)) return 'include';
-  if (exclude.includes(value)) return 'exclude';
   return 'none';
-}
-
-function cycleFacetState(
-  value: string,
-  include: string[],
-  exclude: string[],
-): { include: string[]; exclude: string[] } {
-  const state = getFacetState(value, include, exclude);
-  // none -> include -> exclude -> none
-  switch (state) {
-    case 'none':
-      return { include: [...include, value], exclude };
-    case 'include':
-      return {
-        include: include.filter((v) => v !== value),
-        exclude: [...exclude, value],
-      };
-    case 'exclude':
-      return {
-        include,
-        exclude: exclude.filter((v) => v !== value),
-      };
-  }
 }
 
 // ---------------------------------------------------------------------------
@@ -78,12 +53,14 @@ function FacetSection({
   include,
   exclude,
   onToggle,
+  onExclude,
 }: {
   title: string;
   items: { value: string; count: number }[];
   include: string[];
   exclude: string[];
   onToggle: (value: string) => void;
+  onExclude: (value: string) => void;
 }) {
   const [collapsed, setCollapsed] = useState(false);
   const hasActive = include.length > 0 || exclude.length > 0;
@@ -112,34 +89,58 @@ function FacetSection({
       {!collapsed && (
         <div className="space-y-0.5">
           {items.map(({ value, count }) => {
-            const state = getFacetState(value, include, exclude);
+            const state = getFacetState(value, include);
+            const isExcluded = exclude.includes(value);
+
             return (
-              <button
+              <div
                 key={value}
-                onClick={() => onToggle(value)}
                 className={cn(
-                  'flex w-full items-center gap-2 rounded px-1.5 py-1 text-xs transition-colors',
+                  'group flex w-full items-center gap-2 rounded px-1.5 py-1 text-xs transition-colors',
                   'hover:bg-accent/60',
                   state === 'include' && 'bg-primary/10 text-primary',
-                  state === 'exclude' && 'bg-destructive/10 text-destructive',
+                  isExcluded && 'opacity-50',
                 )}
               >
-                <span
-                  className={cn(
-                    'flex size-3.5 shrink-0 items-center justify-center rounded-sm border',
-                    state === 'include' && 'border-primary bg-primary text-primary-foreground',
-                    state === 'exclude' && 'border-destructive bg-destructive text-white',
-                    state === 'none' && 'border-border',
-                  )}
+                <button
+                  onClick={() => onToggle(value)}
+                  className="flex flex-1 items-center gap-2 min-w-0"
                 >
-                  {state === 'include' && <Plus className="size-2.5" strokeWidth={3} />}
-                  {state === 'exclude' && <Minus className="size-2.5" strokeWidth={3} />}
-                </span>
-                <span className="truncate">{value}</span>
-                <span className="ml-auto shrink-0 tabular-nums text-muted-foreground/50">
-                  {count}
-                </span>
-              </button>
+                  <span
+                    className={cn(
+                      'flex size-3.5 shrink-0 items-center justify-center rounded-sm border transition-colors',
+                      state === 'include' && 'border-primary bg-primary text-primary-foreground',
+                      state === 'none' && 'border-border',
+                    )}
+                  >
+                    {state === 'include' && <Plus className="size-2.5" strokeWidth={3} />}
+                  </span>
+                  <span className={cn('truncate', isExcluded && 'line-through')}>
+                    {value}
+                  </span>
+                </button>
+
+                <div className="flex items-center gap-1.5 ml-auto shrink-0">
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onExclude(value);
+                    }}
+                    className={cn(
+                      'flex size-4 items-center justify-center rounded-full transition-colors',
+                      isExcluded
+                        ? 'bg-destructive text-white'
+                        : 'text-muted-foreground/30 hover:bg-destructive/20 hover:text-destructive md:opacity-0 group-hover:opacity-100',
+                    )}
+                    title={isExcluded ? 'Remove exclusion' : 'Exclude'}
+                  >
+                    <Minus className="size-2.5" strokeWidth={3} />
+                  </button>
+                  <span className="tabular-nums text-muted-foreground/50">
+                    {count}
+                  </span>
+                </div>
+              </div>
             );
           })}
         </div>
@@ -166,12 +167,39 @@ export function FacetSidebar({
     filters.exclude_keywords.length > 0;
 
   const handleSourceToggle = (value: string) => {
-    const { include, exclude } = cycleFacetState(
-      value,
-      filters.sources_include,
-      filters.sources_exclude,
-    );
-    onChange({ ...filters, sources_include: include, sources_exclude: exclude });
+    const isIncluded = filters.sources_include.includes(value);
+    const newInclude = isIncluded
+      ? filters.sources_include.filter((v) => v !== value)
+      : [...filters.sources_include, value];
+
+    // If we include it, remove from exclude
+    const newExclude = !isIncluded
+      ? filters.sources_exclude.filter((v) => v !== value)
+      : filters.sources_exclude;
+
+    onChange({
+      ...filters,
+      sources_include: newInclude,
+      sources_exclude: newExclude,
+    });
+  };
+
+  const handleSourceExclude = (value: string) => {
+    const isExcluded = filters.sources_exclude.includes(value);
+    const newExclude = isExcluded
+      ? filters.sources_exclude.filter((v) => v !== value)
+      : [...filters.sources_exclude, value];
+
+    // If we exclude it, remove from include
+    const newInclude = !isExcluded
+      ? filters.sources_include.filter((v) => v !== value)
+      : filters.sources_include;
+
+    onChange({
+      ...filters,
+      sources_include: newInclude,
+      sources_exclude: newExclude,
+    });
   };
 
   const addKeyword = () => {
@@ -221,6 +249,7 @@ export function FacetSidebar({
             include={filters.sources_include}
             exclude={filters.sources_exclude}
             onToggle={handleSourceToggle}
+            onExclude={handleSourceExclude}
           />
 
           {/* Keyword Exclusion */}
