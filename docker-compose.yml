@@ -32,7 +32,9 @@ services:
     restart: unless-stopped
 
   backend:
-    image: ghcr.io/orshemtov/news-dashboard-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     env_file: .env.docker
     environment:
       # Assembled from POSTGRES_* — no DATABASE_URL duplication in .env.docker
@@ -50,7 +52,11 @@ services:
     restart: unless-stopped
 
   frontend:
-    image: ghcr.io/orshemtov/news-dashboard-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=http://${LOCAL_IP}:8000/api
     environment:
       BACKEND_URL: http://backend:8000
     ports:
