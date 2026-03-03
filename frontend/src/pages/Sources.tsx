@@ -18,6 +18,7 @@ import {
   X,
   Send as TelegramIcon,
   Plus,
+  Check,
   Sparkles,
   ChevronDown,
   ChevronUp,
@@ -28,6 +29,11 @@ export default function Sources() {
   const createSource = useCreateSource();
   const updateSource = useUpdateSource();
   const deleteSource = useDeleteSource();
+
+  // Track which specific channel usernames are currently being added
+  const [pendingAdds, setPendingAdds] = useState<Set<string>>(new Set());
+  // Track which usernames were just successfully added (for instant feedback)
+  const [justAdded, setJustAdded] = useState<Set<string>>(new Set());
 
   // Channel search
   const [searchQuery, setSearchQuery] = useState('');
@@ -57,24 +63,55 @@ export default function Sources() {
   }) => {
     const username = channel.username;
     if (!username) return;
-    createSource.mutate({
-      name: channel.title || username,
-      source_type: 'telegram',
-      config: { channel: username },
-    });
+    setPendingAdds((prev) => new Set(prev).add(username));
+    createSource.mutate(
+      {
+        name: channel.title || username,
+        source_type: 'telegram',
+        config: { channel: username },
+      },
+      {
+        onSuccess: () => {
+          setJustAdded((prev) => new Set(prev).add(username));
+        },
+        onSettled: () => {
+          setPendingAdds((prev) => {
+            const next = new Set(prev);
+            next.delete(username);
+            return next;
+          });
+        },
+      },
+    );
   };
 
   const handleAddSuggestion = (suggestion: ChannelSuggestion) => {
-    createSource.mutate({
-      name: suggestion.name,
-      source_type: 'telegram',
-      config: { channel: suggestion.username },
-    });
+    const username = suggestion.username;
+    setPendingAdds((prev) => new Set(prev).add(username));
+    createSource.mutate(
+      {
+        name: suggestion.name,
+        source_type: 'telegram',
+        config: { channel: username },
+      },
+      {
+        onSuccess: () => {
+          setJustAdded((prev) => new Set(prev).add(username));
+        },
+        onSettled: () => {
+          setPendingAdds((prev) => {
+            const next = new Set(prev);
+            next.delete(username);
+            return next;
+          });
+        },
+      },
+    );
   };
 
-  // Filter out already-added channels from suggestions
+  // Filter out already-added channels and ones just added this session
   const filteredSuggestions = (suggestions ?? []).filter(
-    (s) => !existingChannels.has(s.username.toLowerCase()),
+    (s) => !existingChannels.has(s.username.toLowerCase()) && !justAdded.has(s.username),
   );
   const visibleSuggestions = showAllSuggestions
     ? filteredSuggestions
@@ -160,11 +197,16 @@ export default function Sources() {
                     variant={alreadyAdded ? 'ghost' : 'outline'}
                     size="sm"
                     className="h-7 shrink-0"
-                    disabled={alreadyAdded || createSource.isPending}
+                    disabled={alreadyAdded || pendingAdds.has(ch.username ?? '') || justAdded.has(ch.username ?? '')}
                     onClick={() => handleAddFromSearch(ch)}
                   >
-                    {alreadyAdded ? (
-                      'Added'
+                    {pendingAdds.has(ch.username ?? '') ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : alreadyAdded || justAdded.has(ch.username ?? '') ? (
+                      <>
+                        <Check className="size-3" />
+                        Added
+                      </>
                     ) : (
                       <>
                         <Plus className="size-3" />
@@ -315,11 +357,17 @@ export default function Sources() {
                       variant="outline"
                       size="sm"
                       className="h-7 shrink-0"
-                      disabled={createSource.isPending}
+                      disabled={pendingAdds.has(suggestion.username)}
                       onClick={() => handleAddSuggestion(suggestion)}
                     >
-                      <Plus className="size-3" />
-                      Add
+                      {pendingAdds.has(suggestion.username) ? (
+                        <Loader2 className="size-3 animate-spin" />
+                      ) : (
+                        <>
+                          <Plus className="size-3" />
+                          Add
+                        </>
+                      )}
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground line-clamp-2">

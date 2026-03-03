@@ -18,6 +18,7 @@ import {
   PanelLeftClose,
   PanelLeft,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { ArticleCard } from '@/components/feed/ArticleCard';
 import { ArticleDetailDialog } from '@/components/feed/ArticleDetailDialog';
 import { StatsBar } from '@/components/feed/StatsBar';
@@ -97,15 +98,6 @@ export default function Feed() {
     ...(facetFilters.sources_exclude.length > 0 && {
       sources_exclude: facetFilters.sources_exclude,
     }),
-    ...(facetFilters.languages_include.length > 0 && {
-      languages_include: facetFilters.languages_include,
-    }),
-    ...(facetFilters.languages_exclude.length > 0 && {
-      languages_exclude: facetFilters.languages_exclude,
-    }),
-    ...(facetFilters.forwarded !== undefined && {
-      forwarded: facetFilters.forwarded,
-    }),
     ...(facetFilters.exclude_keywords.length > 0 && {
       exclude_keywords: facetFilters.exclude_keywords,
     }),
@@ -142,9 +134,6 @@ export default function Feed() {
       from_date: fromDate,
       sources_include: facetFilters.sources_include.length > 0 ? facetFilters.sources_include : undefined,
       sources_exclude: facetFilters.sources_exclude.length > 0 ? facetFilters.sources_exclude : undefined,
-      languages_include: facetFilters.languages_include.length > 0 ? facetFilters.languages_include : undefined,
-      languages_exclude: facetFilters.languages_exclude.length > 0 ? facetFilters.languages_exclude : undefined,
-      forwarded: facetFilters.forwarded,
       exclude_keywords: facetFilters.exclude_keywords.length > 0 ? facetFilters.exclude_keywords : undefined,
     };
     search.mutate(request);
@@ -212,26 +201,26 @@ export default function Feed() {
   const activeFacetCount =
     facetFilters.sources_include.length +
     facetFilters.sources_exclude.length +
-    facetFilters.languages_include.length +
-    facetFilters.languages_exclude.length +
-    (facetFilters.forwarded !== undefined ? 1 : 0) +
     facetFilters.exclude_keywords.length;
 
   return (
     <div className="flex gap-0">
-      {/* Facet Sidebar */}
-      {sidebarOpen && (
-        <aside className="hidden w-60 shrink-0 md:block">
-          <div className="sticky top-16 h-[calc(100vh-4rem)]">
-            <FacetSidebar
-              facets={facets}
-              filters={facetFilters}
-              onChange={setFacetFilters}
-              isLoading={facetsLoading}
-            />
-          </div>
-        </aside>
-      )}
+      {/* Facet Sidebar — always in DOM, width transitions to avoid layout jump */}
+      <aside
+        className={cn(
+          'hidden shrink-0 overflow-hidden transition-all duration-200 md:block',
+          sidebarOpen ? 'w-60' : 'w-0',
+        )}
+      >
+        <div className="sticky top-16 h-[calc(100vh-4rem)] w-60">
+          <FacetSidebar
+            facets={facets}
+            filters={facetFilters}
+            onChange={setFacetFilters}
+            isLoading={facetsLoading}
+          />
+        </div>
+      </aside>
 
       {/* Main content */}
       <div className="min-w-0 flex-1 space-y-3">
@@ -314,58 +303,62 @@ export default function Feed() {
 
         {/* Filters */}
         <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/30 bg-card/40 px-3 py-2">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">Time</span>
-          <div className="flex rounded-md border border-border/40">
-            {TIME_RANGES.map((tr) => (
-              <button
-                key={tr.label}
-                onClick={() => {
-                  setTimeRange(tr.hours);
-                  localStorage.setItem('news-dashboard-time-range', String(tr.hours));
-                }}
-                className={`px-2 py-1 text-xs font-medium transition-colors first:rounded-l-md last:rounded-r-md ${
-                  timeRange === tr.hours
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground/70 hover:bg-accent hover:text-accent-foreground'
-                }`}
-              >
-                {tr.label}
-              </button>
-            ))}
+          <div className="flex items-center gap-3">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">Time</span>
+            <div className="flex overflow-x-auto rounded-md border border-border/40 no-scrollbar">
+              {TIME_RANGES.map((tr) => (
+                <button
+                  key={tr.label}
+                  onClick={() => {
+                    setTimeRange(tr.hours);
+                    localStorage.setItem('news-dashboard-time-range', String(tr.hours));
+                  }}
+                  className={`shrink-0 px-2 py-1 text-xs font-medium transition-colors first:rounded-l-md last:rounded-r-md ${
+                    timeRange === tr.hours
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-muted-foreground/70 hover:bg-accent hover:text-accent-foreground'
+                  }`}
+                >
+                  {tr.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="mx-1 h-4 w-px bg-border" />
+          <div className="hidden mx-1 h-4 w-px bg-border sm:block" />
 
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs"
-            onClick={() =>
-              setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest'))
-            }
-          >
-            <ArrowUpDown className="size-3" />
-            {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
-          </Button>
+          <div className="flex flex-1 items-center gap-3 min-w-0">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs shrink-0"
+              onClick={() =>
+                setSortOrder((s) => (s === 'newest' ? 'oldest' : 'newest'))
+              }
+            >
+              <ArrowUpDown className="size-3" />
+              {sortOrder === 'newest' ? 'Newest' : 'Oldest'}
+            </Button>
 
-          <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <input
-              type="checkbox"
-              checked={hideDuplicates}
-              onChange={(e) => {
-                setHideDuplicates(e.target.checked);
-              }}
-              className="rounded border-input"
-            />
-            Hide dupes
-          </label>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+              <input
+                type="checkbox"
+                checked={hideDuplicates}
+                onChange={(e) => {
+                  setHideDuplicates(e.target.checked);
+                }}
+                className="rounded border-input"
+              />
+              Hide dupes
+            </label>
 
-          <span className="ml-auto text-xs text-muted-foreground">
-            {total} article{total !== 1 ? 's' : ''}
-            {isSearching && search.data
-              ? ` for "${search.data.query}" (${search.data.mode})`
-              : ''}
-          </span>
+            <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
+              {total} article{total !== 1 ? 's' : ''}
+              {isSearching && search.data
+                ? ` for "${search.data.query}"`
+                : ''}
+            </span>
+          </div>
         </div>
 
         {/* Loading (initial) */}

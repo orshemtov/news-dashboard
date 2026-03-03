@@ -13,18 +13,12 @@ import { ChevronDown, ChevronRight, X, Filter, Minus, Plus } from 'lucide-react'
 export interface FacetFilters {
   sources_include: string[];
   sources_exclude: string[];
-  languages_include: string[];
-  languages_exclude: string[];
-  forwarded?: boolean;
   exclude_keywords: string[];
 }
 
 export const EMPTY_FACET_FILTERS: FacetFilters = {
   sources_include: [],
   sources_exclude: [],
-  languages_include: [],
-  languages_exclude: [],
-  forwarded: undefined,
   exclude_keywords: [],
 };
 
@@ -169,9 +163,6 @@ export function FacetSidebar({
   const hasAnyFilter =
     filters.sources_include.length > 0 ||
     filters.sources_exclude.length > 0 ||
-    filters.languages_include.length > 0 ||
-    filters.languages_exclude.length > 0 ||
-    filters.forwarded !== undefined ||
     filters.exclude_keywords.length > 0;
 
   const handleSourceToggle = (value: string) => {
@@ -181,28 +172,6 @@ export function FacetSidebar({
       filters.sources_exclude,
     );
     onChange({ ...filters, sources_include: include, sources_exclude: exclude });
-  };
-
-  const handleLanguageToggle = (value: string) => {
-    const { include, exclude } = cycleFacetState(
-      value,
-      filters.languages_include,
-      filters.languages_exclude,
-    );
-    onChange({
-      ...filters,
-      languages_include: include,
-      languages_exclude: exclude,
-    });
-  };
-
-  const handleForwardedToggle = (value: string) => {
-    const boolVal = value === 'true';
-    // Toggle: if already set to this value, clear it
-    onChange({
-      ...filters,
-      forwarded: filters.forwarded === boolVal ? undefined : boolVal,
-    });
   };
 
   const addKeyword = () => {
@@ -253,55 +222,6 @@ export function FacetSidebar({
             exclude={filters.sources_exclude}
             onToggle={handleSourceToggle}
           />
-
-          {/* Languages */}
-          <FacetSection
-            title="Language"
-            items={facets?.languages ?? []}
-            include={filters.languages_include}
-            exclude={filters.languages_exclude}
-            onToggle={handleLanguageToggle}
-          />
-
-          {/* Forwarded */}
-          {facets?.forwarded && facets.forwarded.length > 0 && (
-            <div className="space-y-1">
-              <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70">
-                Forwarded
-              </span>
-              <div className="space-y-0.5">
-                {facets.forwarded.map(({ value, count }) => {
-                  const isActive = filters.forwarded === (value === 'true');
-                  return (
-                    <button
-                      key={value}
-                      onClick={() => handleForwardedToggle(value)}
-                      className={cn(
-                        'flex w-full items-center gap-2 rounded px-1.5 py-1 text-xs transition-colors',
-                        'hover:bg-accent/60',
-                        isActive && 'bg-primary/10 text-primary',
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          'flex size-3.5 shrink-0 items-center justify-center rounded-sm border',
-                          isActive
-                            ? 'border-primary bg-primary text-primary-foreground'
-                            : 'border-border',
-                        )}
-                      >
-                        {isActive && <Plus className="size-2.5" strokeWidth={3} />}
-                      </span>
-                      <span>{value === 'true' ? 'Yes' : 'No'}</span>
-                      <span className="ml-auto tabular-nums text-muted-foreground/50">
-                        {count}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
 
           {/* Keyword Exclusion */}
           <div className="space-y-1.5">

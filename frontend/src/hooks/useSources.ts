@@ -16,6 +16,7 @@ export function useSources() {
   return useQuery({
     queryKey: ['sources'],
     queryFn: getSources,
+    staleTime: 30_000, // treat as fresh for 30s — sources don't change rapidly
   });
 }
 

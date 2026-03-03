@@ -25,11 +25,11 @@ export function StatsBar() {
   ];
 
   return (
-    <div className="flex items-center gap-4 text-sm">
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm overflow-hidden">
       {items.map((item, i) => (
         <div key={item.label} className="flex items-center gap-2">
-          {i > 0 && <div className="h-3 w-px bg-border/50" />}
-          <div className="flex items-center gap-1.5">
+          {i > 0 && <div className="hidden h-3 w-px bg-border/50 sm:block" />}
+          <div className="flex items-center gap-1.5 min-w-0">
             <item.icon className="size-3 text-primary/60" />
             <span className="text-muted-foreground/70 text-xs">{item.label}</span>
             <span className="text-xs font-medium">{item.value}</span>

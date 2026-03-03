@@ -13,6 +13,7 @@ export function Header() {
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
+    localStorage.setItem('pulse-theme', dark ? 'dark' : 'light');
   }, [dark]);
 
   const navItem = (path: string, icon: React.ReactNode, label: string) => {

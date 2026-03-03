@@ -16,6 +16,16 @@ from app.models.article import Article
 from app.services.channel_catalog import CatalogChannel, CHANNEL_CATALOG, get_catalog_excluding
 from app.services.embedding import EmbeddingService
 
+# Module-level singleton so the transformer model is not reloaded on every request
+_embedding_service: EmbeddingService | None = None
+
+
+def _get_embedding_service() -> EmbeddingService:
+    global _embedding_service
+    if _embedding_service is None:
+        _embedding_service = EmbeddingService()
+    return _embedding_service
+
 
 async def _compute_interest_vector(
     db: AsyncSession,
@@ -87,8 +97,8 @@ async def get_channel_suggestions(
     # 2. Compute interest vector
     interest_vec = await _compute_interest_vector(db)
 
-    # 3. Embed catalog descriptions
-    embedding_service = EmbeddingService()
+    # 3. Embed catalog descriptions (reuse singleton to avoid reloading the model)
+    embedding_service = _get_embedding_service()
     descriptions = [ch.description for ch in candidates]
     catalog_embeddings = await embedding_service.embed_batch(descriptions)
 
