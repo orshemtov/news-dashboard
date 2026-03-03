@@ -7,7 +7,9 @@ from typing import Any
 from loguru import logger
 from telethon import TelegramClient
 
-from app.ingestors.base import BaseIngestor, RawArticle
+from telethon.errors import UsernameInvalidError, UsernameNotOccupiedError
+
+from app.ingestors.base import BaseIngestor, RawArticle, SourceDisabledError
 
 _DEFAULT_LIMIT = 50
 
@@ -90,6 +92,10 @@ class TelegramIngestor(BaseIngestor):
 
         try:
             entity = await self._client.get_entity(self._channel)
+        except (UsernameInvalidError, UsernameNotOccupiedError) as exc:
+            raise SourceDisabledError(
+                f"Channel '{self._channel}' does not exist or was deleted: {exc}"
+            ) from exc
         except Exception:
             logger.exception(
                 "Telegram ingestor {}: failed to resolve channel {}",

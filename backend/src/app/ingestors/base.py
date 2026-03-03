@@ -21,6 +21,13 @@ class RawArticle:
     media_attachments: list[dict] = field(default_factory=list)
 
 
+class SourceDisabledError(Exception):
+    """Raised when a source encounters a permanent error and should be disabled.
+
+    For example, a Telegram channel that no longer exists.
+    """
+
+
 class BaseIngestor(abc.ABC):
     """Abstract base for all news source ingestors."""
 

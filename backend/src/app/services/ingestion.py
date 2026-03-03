@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.db.session import async_session_factory
 from app.ingestors import RawArticle, TelegramIngestor
-from app.ingestors.base import BaseIngestor
+from app.ingestors.base import BaseIngestor, SourceDisabledError
 from app.models import Article, Source
 from app.services.embedding import EmbeddingService
 from app.services.events import NewArticlesEvent, article_to_sse_dict
@@ -159,6 +159,13 @@ async def ingest_source(
 
     try:
         raw_articles = await ingestor.fetch()
+    except SourceDisabledError as exc:
+        logger.warning("Source {} permanently failed, disabling: {}", source.name, exc)
+        source.enabled = False
+        source.error_message = str(exc)
+        source.last_polled_at = datetime.now(tz=UTC)
+        await db.flush()
+        return 0, None
     except Exception as exc:
         logger.exception("Ingestion failed for source {}", source.name)
         source.error_message = str(exc)
