@@ -2,10 +2,14 @@ import type { MediaAttachment } from '@/types';
 
 /**
  * Build a full URL for a media attachment served by the backend.
- * Attachment URLs are relative paths — we prefix them with `/api/media/`.
+ * Attachment URLs are relative paths — we prefix them with the API base URL.
  */
 export function mediaUrl(relativePath: string): string {
-  return `/api/media/${relativePath}`;
+  const baseUrl = import.meta.env.VITE_API_BASE_URL ?? '/api';
+  // If baseUrl is a full URL (like http://10.0.0.1:8000/api),
+  // we need to make sure we don't end up with /api/api/media
+  const cleanBase = baseUrl.endsWith('/') ? baseUrl.slice(0, -1) : baseUrl;
+  return `${cleanBase}/media/${relativePath}`;
 }
 
 /**
