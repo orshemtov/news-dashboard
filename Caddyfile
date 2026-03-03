@@ -1,0 +1,20 @@
+{
+    admin off
+}
+
+# Domains for local access
+news.home, news.local, :80 {
+    # Route API requests to backend
+    handle_path /api/* {
+        reverse_proxy backend:8000
+    }
+
+    # All other requests go to frontend
+    handle {
+        reverse_proxy frontend:80
+    }
+
+    log {
+        output stdout
+    }
+}
