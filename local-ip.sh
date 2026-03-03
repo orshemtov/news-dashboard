@@ -9,13 +9,17 @@ if [ -z "$LOCAL_IP" ]; then
 fi
 
 if [ -n "$LOCAL_IP" ]; then
-    # Create or update .env.local with the current IP
-    if grep -q "LOCAL_IP=" .env.docker 2>/dev/null; then
-        sed -i '' "s/LOCAL_IP=.*/LOCAL_IP=$LOCAL_IP/" .env.docker
+    # Ensure .env exists
+    touch .env
+    
+    # Update LOCAL_IP in .env (standard for Docker Compose)
+    if grep -q "LOCAL_IP=" .env; then
+        # Use a temporary file for sed to avoid some macOS vs Linux differences
+        sed "s/LOCAL_IP=.*/LOCAL_IP=$LOCAL_IP/" .env > .env.tmp && mv .env.tmp .env
     else
-        echo "LOCAL_IP=$LOCAL_IP" >> .env.docker
+        echo "LOCAL_IP=$LOCAL_IP" >> .env
     fi
-    echo "LOCAL_IP set to $LOCAL_IP in .env.docker"
+    echo "LOCAL_IP set to $LOCAL_IP in .env"
 else
     echo "Could not detect local IP."
     exit 1
