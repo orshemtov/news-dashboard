@@ -41,9 +41,6 @@ const TIME_RANGES = [
   { label: '4h', hours: 4 },
   { label: '12h', hours: 12 },
   { label: '1d', hours: 24 },
-  { label: '3d', hours: 72 },
-  { label: '7d', hours: 168 },
-  { label: '30d', hours: 720 },
   { label: 'All', hours: 0 },
 ] as const;
 
@@ -302,9 +299,9 @@ export default function Feed() {
         )}
 
         {/* Filters */}
-        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border/30 bg-card/40 px-3 py-2">
-          <div className="flex items-center gap-3">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60">Time</span>
+        <div className="flex flex-col gap-3 rounded-lg border border-border/30 bg-card/40 px-3 py-2 sm:flex-row sm:items-center">
+          <div className="flex items-center gap-3 overflow-hidden">
+            <span className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground/60 shrink-0">Time</span>
             <div className="flex overflow-x-auto rounded-md border border-border/40 no-scrollbar">
               {TIME_RANGES.map((tr) => (
                 <button
@@ -313,11 +310,12 @@ export default function Feed() {
                     setTimeRange(tr.hours);
                     localStorage.setItem('news-dashboard-time-range', String(tr.hours));
                   }}
-                  className={`shrink-0 px-2 py-1 text-xs font-medium transition-colors first:rounded-l-md last:rounded-r-md ${
+                  className={cn(
+                    'shrink-0 px-2.5 py-1 text-xs font-medium transition-colors',
                     timeRange === tr.hours
                       ? 'bg-primary text-primary-foreground'
                       : 'text-muted-foreground/70 hover:bg-accent hover:text-accent-foreground'
-                  }`}
+                  )}
                 >
                   {tr.label}
                 </button>
@@ -325,7 +323,7 @@ export default function Feed() {
             </div>
           </div>
 
-          <div className="hidden mx-1 h-4 w-px bg-border sm:block" />
+          <div className="hidden h-4 w-px bg-border/50 sm:block" />
 
           <div className="flex flex-1 items-center gap-3 min-w-0">
             <Button
