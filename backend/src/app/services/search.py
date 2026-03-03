@@ -143,23 +143,8 @@ class SearchService:
 
         Returns a tuple of (articles, total_count).
         """
-        if request.mode == "keyword":
-            articles = await self.keyword_search(
-                request.query, limit=request.page_size * 3, request=request
-            )
-            total = len(articles)
-            start = (request.page - 1) * request.page_size
-            return articles[start : start + request.page_size], total
-
-        if request.mode == "semantic":
-            articles = await self.semantic_search(
-                request.query, limit=request.page_size * 3, request=request
-            )
-            total = len(articles)
-            start = (request.page - 1) * request.page_size
-            return articles[start : start + request.page_size], total
-
         # Hybrid: run both searches then merge via RRF
+        # We always use hybrid search now, ignoring request.mode if it's set
         keyword_results, semantic_results = (
             await self.keyword_search(request.query, limit=request.page_size * 3, request=request),
             await self.semantic_search(

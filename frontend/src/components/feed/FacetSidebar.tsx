@@ -71,7 +71,7 @@ function FacetSection({
     <div className="space-y-1">
       <button
         onClick={() => setCollapsed((c) => !c)}
-        className="flex w-full items-center gap-1 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70 hover:text-foreground"
+        className="flex h-7 w-full items-center gap-1 py-1 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/70 hover:text-foreground"
       >
         {collapsed ? (
           <ChevronRight className="size-3" />
@@ -79,11 +79,13 @@ function FacetSection({
           <ChevronDown className="size-3" />
         )}
         {title}
-        {hasActive && (
-          <span className="ml-auto rounded-full bg-primary/15 px-1.5 text-[10px] font-medium text-primary">
-            {include.length + exclude.length}
-          </span>
-        )}
+        <div className="ml-auto flex h-4 min-w-[1.5rem] items-center justify-end">
+          {hasActive && (
+            <span className="rounded-full bg-primary/15 px-1.5 text-[10px] font-medium text-primary">
+              {include.length + exclude.length}
+            </span>
+          )}
+        </div>
       </button>
 
       {!collapsed && (
@@ -121,21 +123,23 @@ function FacetSection({
                 </button>
 
                 <div className="flex items-center gap-1.5 ml-auto shrink-0 min-w-[3.5rem] justify-end">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onExclude(value);
-                    }}
-                    className={cn(
-                      'flex size-4 items-center justify-center rounded-full transition-colors',
-                      isExcluded
-                        ? 'bg-destructive text-white'
-                        : 'text-muted-foreground/30 hover:bg-destructive/20 hover:text-destructive md:opacity-0 group-hover:opacity-100',
-                    )}
-                    title={isExcluded ? 'Remove exclusion' : 'Exclude'}
-                  >
-                    <Minus className="size-2.5" strokeWidth={3} />
-                  </button>
+                  <div className="flex size-4 items-center justify-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onExclude(value);
+                      }}
+                      className={cn(
+                        'flex size-4 items-center justify-center rounded-full transition-colors',
+                        isExcluded
+                          ? 'bg-destructive text-white'
+                          : 'text-muted-foreground/30 hover:bg-destructive/20 hover:text-destructive md:opacity-0 group-hover:opacity-100',
+                      )}
+                      title={isExcluded ? 'Remove exclusion' : 'Exclude'}
+                    >
+                      <Minus className="size-2.5" strokeWidth={3} />
+                    </button>
+                  </div>
                   <span className="tabular-nums text-muted-foreground/50 w-7 text-right">
                     {count}
                   </span>
@@ -222,21 +226,23 @@ export function FacetSidebar({
   return (
     <div className="flex h-full flex-col border-r border-border/30 bg-card/30">
       {/* Header */}
-      <div className="flex items-center justify-between border-b border-border/30 px-3 py-2.5">
+      <div className="flex h-10 shrink-0 items-center justify-between border-b border-border/30 px-3">
         <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground/80">
           <Filter className="size-3.5" />
           Filters
         </div>
-        {hasAnyFilter && (
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
-            onClick={() => onChange(EMPTY_FACET_FILTERS)}
-          >
-            Clear all
-          </Button>
-        )}
+        <div className="flex h-5 items-center">
+          {hasAnyFilter && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-5 px-1.5 text-[10px] text-muted-foreground hover:text-foreground"
+              onClick={() => onChange(EMPTY_FACET_FILTERS)}
+            >
+              Clear all
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Scrollable facets */}

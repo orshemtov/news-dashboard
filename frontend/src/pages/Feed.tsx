@@ -22,6 +22,7 @@ import {
 import { cn } from '@/lib/utils';
 import { ArticleCard } from '@/components/feed/ArticleCard';
 import { ArticleDetailDialog } from '@/components/feed/ArticleDetailDialog';
+import { BreakingBar } from '@/components/feed/BreakingBar';
 import { StatsBar } from '@/components/feed/StatsBar';
 import {
   FacetSidebar,
@@ -71,7 +72,7 @@ function sourceColor(name: string): string {
 
 export default function Feed() {
   // SSE: auto-update when new articles arrive
-  const { newIds, clearNewId } = useArticleStream();
+  const { newIds, clearNewId, burst, clearBurst } = useArticleStream();
 
   // Filters
   const [hideDuplicates, setHideDuplicates] = useState(true);
@@ -94,7 +95,6 @@ export default function Feed() {
 
   // Search
   const [searchQuery, setSearchQuery] = useState('');
-  const [searchMode, setSearchMode] = useState<'keyword' | 'semantic' | 'hybrid'>('hybrid');
   const [isSearching, setIsSearching] = useState(false);
 
   // Article detail
@@ -150,7 +150,7 @@ export default function Feed() {
     setIsSearching(true);
     const request: SearchRequest = {
       query: text,
-      mode: searchMode,
+      mode: 'hybrid',
       from_date: fromDate,
       sources_include: facetFilters.sources_include.length > 0 ? facetFilters.sources_include : undefined,
       sources_exclude: facetFilters.sources_exclude.length > 0 ? facetFilters.sources_exclude : undefined,
@@ -290,6 +290,15 @@ export default function Feed() {
 
       {/* Main content */}
       <div className="min-w-0 flex-1 space-y-3">
+        {/* Breaking Bar */}
+        {burst && (
+          <BreakingBar 
+            burst={burst} 
+            onClose={clearBurst} 
+            onClick={() => setSelectedArticle(burst.lead_article)} 
+          />
+        )}
+
         {/* Stats Bar */}
         <StatsBar />
 
@@ -378,26 +387,6 @@ export default function Feed() {
             )}
           </Button>
         </div>
-
-        {/* Search mode tabs (visible when searching) */}
-        {(isSearching || searchQuery) && (
-          <Tabs
-            value={searchMode}
-            onValueChange={(v) => setSearchMode(v as typeof searchMode)}
-          >
-            <TabsList className="h-8">
-              <TabsTrigger value="keyword" className="text-xs">
-                Keyword
-              </TabsTrigger>
-              <TabsTrigger value="semantic" className="text-xs">
-                Semantic
-              </TabsTrigger>
-              <TabsTrigger value="hybrid" className="text-xs">
-                Hybrid
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
-        )}
 
         {/* Filters */}
         <div className="flex flex-col gap-3 rounded-lg border border-border/30 bg-card/40 px-3 py-2 sm:flex-row sm:items-center">

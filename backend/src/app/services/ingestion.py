@@ -12,7 +12,7 @@ from app.ingestors import RawArticle, TelegramIngestor
 from app.ingestors.base import BaseIngestor, SourceDisabledError
 from app.models import Article, Source
 from app.services.embedding import EmbeddingService
-from app.services.events import NewArticlesEvent, article_to_sse_dict
+from app.services.events import BurstEvent, NewArticlesEvent, article_to_sse_dict
 
 # ------------------------------------------------------------------
 # Module-level embedding service (lazy singleton)
@@ -135,7 +135,7 @@ async def ingest_source(
     *,
     backfill_hours: int | None = None,
     generate_embeddings: bool = True,
-) -> tuple[int, NewArticlesEvent | None]:
+) -> tuple[int, list[NewArticlesEvent | BurstEvent] | None]:
     """Ingest articles from a single *source*.
 
     Returns a ``(new_count, pending_event)`` tuple.  The caller is
@@ -266,18 +266,34 @@ async def ingest_source(
 
     # Build the SSE event but do NOT publish yet – the caller must
     # publish after the DB transaction commits.
-    pending_event: NewArticlesEvent | None = None
+    pending_event: NewArticlesEvent | list[NewArticlesEvent | BurstEvent] | None = None
     if new_articles:
-        pending_event = NewArticlesEvent(
-            source_name=source.name,
-            count=new_count,
-            articles=[article_to_sse_dict(a) for a in new_articles],
-        )
+        events: list[NewArticlesEvent | BurstEvent] = [
+            NewArticlesEvent(
+                source_name=source.name,
+                count=new_count,
+                articles=[article_to_sse_dict(a) for a in new_articles],
+            )
+        ]
+
+        # Check for bursts
+        from app.services.burst_detector import BurstDetector
+
+        detector = BurstDetector(db)
+        seen_clusters = set()
+        for article in new_articles:
+            if article.dedup_cluster_id and article.dedup_cluster_id not in seen_clusters:
+                seen_clusters.add(article.dedup_cluster_id)
+                burst = await detector.check_for_burst(article.dedup_cluster_id)
+                if burst:
+                    events.append(burst)
+
+        pending_event = events
 
     return new_count, pending_event
 
 
-async def ingest_all_sources() -> tuple[dict[str, int], list[NewArticlesEvent]]:
+async def ingest_all_sources() -> tuple[dict[str, int], list[NewArticlesEvent | BurstEvent]]:
     """Fetch all enabled sources and ingest each one.
 
     Each source is ingested in its **own** database transaction so that a
@@ -325,7 +341,7 @@ async def ingest_all_sources() -> tuple[dict[str, int], list[NewArticlesEvent]]:
         return {}, []
 
     summary: dict[str, int] = {}
-    pending_events: list[NewArticlesEvent] = []
+    pending_events: list[NewArticlesEvent | BurstEvent] = []
 
     for source_id, source_name in due_sources:
         try:
@@ -338,7 +354,10 @@ async def ingest_all_sources() -> tuple[dict[str, int], list[NewArticlesEvent]]:
             # Transaction committed — safe to collect the event.
             summary[source_name] = count
             if event is not None:
-                pending_events.append(event)
+                if isinstance(event, list):
+                    pending_events.extend(event)
+                else:
+                    pending_events.append(event)
         except Exception:
             logger.exception("Unexpected error ingesting source {}", source_name)
             summary[source_name] = 0

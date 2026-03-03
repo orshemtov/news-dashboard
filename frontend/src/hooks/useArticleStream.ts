@@ -14,6 +14,13 @@ export function useArticleStream() {
   const queryClient = useQueryClient();
   const eventSourceRef = useRef<EventSource | null>(null);
   const [newIds, setNewIds] = useState<Set<string>>(() => new Set());
+  const [burst, setBurst] = useState<{
+    id: string;
+    lead_article: Article;
+    sources: string[];
+    count: number;
+    timestamp: string;
+  } | null>(null);
 
   const clearNewId = useCallback((id: string) => {
     setNewIds((prev) => {
@@ -24,10 +31,27 @@ export function useArticleStream() {
     });
   }, []);
 
+  const clearBurst = useCallback(() => setBurst(null), []);
+
   useEffect(() => {
     const apiBase = import.meta.env.VITE_API_BASE_URL ?? '/api';
     const es = new EventSource(`${apiBase}/articles/stream`);
     eventSourceRef.current = es;
+
+    es.addEventListener('burst', (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data);
+        setBurst({
+          id: data.cluster_id,
+          lead_article: data.lead_article,
+          sources: data.sources,
+          count: data.count,
+          timestamp: data.timestamp,
+        });
+      } catch (err) {
+        console.error('Failed to parse burst event', err);
+      }
+    });
 
     es.addEventListener('new_articles', (event: MessageEvent) => {
       let articles: Article[];
@@ -94,5 +118,5 @@ export function useArticleStream() {
     };
   }, [queryClient]);
 
-  return { newIds, clearNewId };
+  return { newIds, clearNewId, burst, clearBurst };
 }

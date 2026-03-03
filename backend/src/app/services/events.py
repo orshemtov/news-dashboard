@@ -53,6 +53,27 @@ def article_to_sse_dict(article: Article) -> dict[str, Any]:
 
 
 @dataclass
+class BurstEvent:
+    """Emitted when a 'burst' of semantically similar articles is detected."""
+
+    cluster_id: str
+    lead_article: dict[str, Any]
+    sources: list[str]
+    count: int
+    timestamp: str = field(default_factory=lambda: datetime.now(tz=UTC).isoformat())
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "type": "burst",
+            "cluster_id": self.cluster_id,
+            "lead_article": self.lead_article,
+            "sources": self.sources,
+            "count": self.count,
+            "timestamp": self.timestamp,
+        }
+
+
+@dataclass
 class NewArticlesEvent:
     """Emitted whenever new articles are persisted."""
 
@@ -80,19 +101,19 @@ class EventBus:
     """Simple in-process pub/sub backed by per-subscriber queues."""
 
     def __init__(self) -> None:
-        self._subscribers: set[asyncio.Queue[NewArticlesEvent]] = set()
+        self._subscribers: set[asyncio.Queue[NewArticlesEvent | BurstEvent]] = set()
 
-    def subscribe(self) -> asyncio.Queue[NewArticlesEvent]:
-        q: asyncio.Queue[NewArticlesEvent] = asyncio.Queue()
+    def subscribe(self) -> asyncio.Queue[NewArticlesEvent | BurstEvent]:
+        q: asyncio.Queue[NewArticlesEvent | BurstEvent] = asyncio.Queue()
         self._subscribers.add(q)
         logger.debug("SSE client subscribed (total={})", len(self._subscribers))
         return q
 
-    def unsubscribe(self, q: asyncio.Queue[NewArticlesEvent]) -> None:
+    def unsubscribe(self, q: asyncio.Queue[NewArticlesEvent | BurstEvent]) -> None:
         self._subscribers.discard(q)
         logger.debug("SSE client unsubscribed (total={})", len(self._subscribers))
 
-    def publish(self, event: NewArticlesEvent) -> None:
+    def publish(self, event: NewArticlesEvent | BurstEvent) -> None:
         for q in self._subscribers:
             try:
                 q.put_nowait(event)
