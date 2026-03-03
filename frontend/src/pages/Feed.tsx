@@ -123,8 +123,6 @@ export default function Feed() {
 
   // Facets query — pass same filters so counts reflect current selection
   const { data: facets, isLoading: facetsLoading } = useFacets({
-    is_duplicate: hideDuplicates ? false : undefined,
-    from_date: fromDate,
     ...articleParams,
   });
 
