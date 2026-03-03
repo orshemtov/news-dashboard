@@ -1,6 +1,5 @@
 import { AlertCircle, X, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
 import type { Article } from '@/types';
 
 interface BreakingBarProps {

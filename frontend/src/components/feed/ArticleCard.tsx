@@ -1,9 +1,8 @@
-import { useState, useRef, useMemo } from 'react';
 import type { Article } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { isRtl, getDisplayTitle, getDisplayContent } from '@/lib/text';
-import { thumbnailUrl, mediaUrl, formatDuration } from '@/lib/media';
+import { thumbnailUrl, formatDuration } from '@/lib/media';
 import { ExternalLink, Video, Play, Image } from 'lucide-react';
 
 export function timeAgo(dateStr: string): string {

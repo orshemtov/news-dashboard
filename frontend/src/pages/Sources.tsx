@@ -23,9 +23,7 @@ import {
   ChevronDown,
   ChevronUp,
   AlertCircle,
-  CheckCircle2,
   Circle,
-  RefreshCw,
 } from 'lucide-react';
 import {
   AlertDialog,
