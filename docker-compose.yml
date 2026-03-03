@@ -32,25 +32,35 @@ services:
     restart: unless-stopped
 
   backend:
-    image: ghcr.io/orshemtov/news-dashboard-backend:latest
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     env_file: .env.docker
     environment:
       # Assembled from POSTGRES_* — no DATABASE_URL duplication in .env.docker
       DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
       # Write Telegram session file into the persistent volume
       TELEGRAM_SESSION_NAME: /app/sessions/news_dashboard
+      # Persist media files in a volume
+      MEDIA_STORAGE_PATH: /app/media
     ports:
       - "8000:8000"
     volumes:
       # Persist Telegram session file across container restarts
       - telegram_sessions:/app/sessions
+      # Persist downloaded media (images/videos) across restarts
+      - backend_media:/app/media
     depends_on:
       postgres:
         condition: service_healthy
     restart: unless-stopped
 
   frontend:
-    image: ghcr.io/orshemtov/news-dashboard-frontend:latest
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE_URL=http://${LOCAL_IP}:8000/api
     environment:
       BACKEND_URL: http://backend:8000
     ports:
@@ -62,3 +72,4 @@ services:
 volumes:
   postgres_data:
   telegram_sessions:
+  backend_media:
