@@ -48,6 +48,14 @@ description = "Stop infrastructure"
 dir = "{{config_root}}"
 run = "docker compose down"
 
+[tasks.up]
+description = "Update local IP and start dashboard for local network access"
+dir = "{{config_root}}"
+run = """
+./local-ip.sh && \\
+docker compose up --build -d
+"""
+
 [tasks.infra-logs]
 description = "Tail infrastructure logs"
 dir = "{{config_root}}"
