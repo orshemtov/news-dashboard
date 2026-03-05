@@ -30,6 +30,7 @@ export interface Article {
   summary: string | null;
   ingested_at: string;
   is_duplicate: boolean;
+  is_hidden: boolean;
   dedup_hash: string | null;
   dedup_cluster_id: string | null;
   metadata_: Record<string, unknown>;

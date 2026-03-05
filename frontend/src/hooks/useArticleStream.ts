@@ -108,8 +108,9 @@ export function useArticleStream() {
       );
     });
 
-    es.onerror = () => {
-      // EventSource auto-reconnects on error; nothing extra needed.
+    es.onerror = (err) => {
+      console.error('SSE Connection Error:', err);
+      // EventSource auto-reconnects on error; but we log it to see if it's failing
     };
 
     return () => {

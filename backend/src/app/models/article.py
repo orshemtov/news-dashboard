@@ -47,6 +47,7 @@ class Article(TimestampMixin, Base):
     dedup_hash: Mapped[str] = mapped_column(String, nullable=False)
     dedup_cluster_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), nullable=True)
     is_duplicate: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_hidden: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     __table_args__ = (
         UniqueConstraint("source_type", "external_id", name="uq_source_type_external_id"),
@@ -55,6 +56,7 @@ class Article(TimestampMixin, Base):
         Index("ix_articles_source_name", "source_name"),
         Index("ix_articles_dedup_hash", "dedup_hash", unique=True),
         Index("ix_articles_is_duplicate", "is_duplicate"),
+        Index("ix_articles_is_hidden", "is_hidden"),
         Index("ix_articles_metadata", "metadata", postgresql_using="gin"),
     )
 

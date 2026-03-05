@@ -3,7 +3,7 @@ import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { isRtl, getDisplayTitle, getDisplayContent } from '@/lib/text';
 import { thumbnailUrl, formatDuration } from '@/lib/media';
-import { ExternalLink, Video, Play, Image } from 'lucide-react';
+import { ExternalLink, Video, Play, Image, EyeOff, Eye } from 'lucide-react';
 
 export function timeAgo(dateStr: string): string {
   const now = Date.now();
@@ -33,11 +33,13 @@ function sourceColor(name: string): string {
 interface ArticleCardProps {
   article: Article;
   onClick: () => void;
+  onHide?: (e: React.MouseEvent) => void;
   isNew?: boolean;
+  isHiddenOnlyMode?: boolean;
   onAnimationEnd?: () => void;
 }
 
-export function ArticleCard({ article, onClick, isNew, onAnimationEnd }: ArticleCardProps) {
+export function ArticleCard({ article, onClick, onHide, isNew, isHiddenOnlyMode, onAnimationEnd }: ArticleCardProps) {
   const title = getDisplayTitle(article.title, article.content);
   const body = getDisplayContent(article.content, 280, title);
   const rtl = isRtl(article.content, article.language);
@@ -81,22 +83,33 @@ export function ArticleCard({ article, onClick, isNew, onAnimationEnd }: Article
             </Badge>
           )}
 
-          {/* Spacer + external link */}
+          {/* Spacer + actions */}
           <div className="flex-1" />
-          {article.url && (
-            <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
-              <span className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-tight">Source</span>
+          <div className="flex items-center gap-2 opacity-0 transition-opacity group-hover:opacity-100">
+            {onHide && (
+              <button
+                onClick={onHide}
+                className={cn(
+                  "shrink-0 transition-colors p-1",
+                  isHiddenOnlyMode ? "text-primary hover:text-primary/80" : "text-muted-foreground hover:text-destructive"
+                )}
+                title={isHiddenOnlyMode ? "Unhide article" : "Hide article"}
+              >
+                {isHiddenOnlyMode ? <Eye className="size-3.5" /> : <EyeOff className="size-3.5" />}
+              </button>
+            )}
+            {article.url && (
               <a
                 href={article.url}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="shrink-0 text-muted-foreground hover:text-foreground"
+                className="shrink-0 text-muted-foreground hover:text-foreground p-1"
               >
                 <ExternalLink className="size-3.5" />
               </a>
-            </div>
-          )}
+            )}
+          </div>
         </div>
 
         {/* Title */}

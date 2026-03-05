@@ -35,6 +35,8 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
     env_file: .env.docker
     environment:
       # Assembled from POSTGRES_* — no DATABASE_URL duplication in .env.docker
@@ -43,12 +45,17 @@ services:
       TELEGRAM_SESSION_NAME: /app/sessions/news_dashboard
       # Persist media files in a volume
       MEDIA_STORAGE_PATH: /app/media
-    # No external ports, accessible only via Caddy internally
     volumes:
       # Persist Telegram session file across container restarts
       - telegram_sessions:/app/sessions
       # Persist downloaded media (images/videos) across restarts
       - backend_media:/app/media
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c \"import urllib.request; import json; response = urllib.request.urlopen('http://localhost:8000/api/health'); data = json.load(response); exit(0 if data['status'] == 'ok' else 1)\""]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
     depends_on:
       postgres:
         condition: service_healthy
@@ -60,23 +67,11 @@ services:
       dockerfile: Dockerfile
       args:
         - VITE_API_BASE_URL=/api
-    environment:
-      BACKEND_URL: http://backend:8000
-    # No external ports, accessible only via Caddy internally
-    depends_on:
-      - backend
-    restart: unless-stopped
-
-  caddy:
-    image: caddy:2-alpine
     ports:
       - "80:80"
-    volumes:
-      - ./Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
+    environment:
+      BACKEND_URL: http://backend:8000
     depends_on:
-      - frontend
       - backend
     restart: unless-stopped
 
@@ -84,5 +79,3 @@ volumes:
   postgres_data:
   telegram_sessions:
   backend_media:
-  caddy_data:
-  caddy_config:

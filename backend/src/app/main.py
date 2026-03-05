@@ -150,7 +150,28 @@ def create_app() -> FastAPI:
     # Health check
     @application.get("/api/health", tags=["health"])
     async def health() -> dict[str, str]:
-        return {"status": "ok"}
+        from app.services.telegram_client import get_telegram_client
+
+        status = "ok"
+        telegram_status = "unconfigured"
+
+        settings = get_settings()
+        if settings.telegram_api_id and settings.telegram_api_hash:
+            try:
+                client = await get_telegram_client()
+                if await client.is_user_authorized():
+                    telegram_status = "connected"
+                else:
+                    telegram_status = "unauthorized"
+                    status = "error"
+            except Exception:
+                telegram_status = "error"
+                status = "error"
+
+        return {
+            "status": status,
+            "telegram": telegram_status,
+        }
 
     return application
 

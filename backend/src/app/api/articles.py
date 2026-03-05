@@ -42,8 +42,13 @@ def _apply_filters(
     languages_exclude: list[str] | None = None,
     forwarded: bool | None = None,
     exclude_keywords: list[str] | None = None,
+    include_hidden: bool = False,
 ) -> Select:
     """Apply all supported filters to a SELECT statement."""
+    # Hidden articles filter
+    if not include_hidden:
+        stmt = stmt.where(Article.is_hidden == False)
+
     # Legacy single-value filters
     if source_type is not None:
         stmt = stmt.where(Article.source_type == source_type)
@@ -264,6 +269,7 @@ async def list_articles(
     languages_exclude: list[str] | None = Query(None),
     forwarded: bool | None = None,
     exclude_keywords: list[str] | None = Query(None),
+    include_hidden: bool = False,
     db: AsyncSession = Depends(get_db),
 ) -> ArticleListResponse:
     """List articles with pagination and filtering."""
@@ -282,6 +288,7 @@ async def list_articles(
         languages_exclude=languages_exclude,
         forwarded=forwarded,
         exclude_keywords=exclude_keywords,
+        include_hidden=include_hidden,
     )
 
     # Total count
@@ -327,3 +334,37 @@ async def delete_article(
     if article is None:
         raise HTTPException(status_code=404, detail="Article not found")
     await db.delete(article)
+
+
+@router.post("/{article_id}/hide", response_model=ArticleResponse)
+async def hide_article(
+    article_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> ArticleResponse:
+    """Hide an article from the feed."""
+    result = await db.execute(select(Article).where(Article.id == article_id))
+    article = result.scalar_one_or_none()
+    if article is None:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    article.is_hidden = True
+    await db.commit()
+    await db.refresh(article)
+    return ArticleResponse.model_validate(article)
+
+
+@router.post("/{article_id}/unhide", response_model=ArticleResponse)
+async def unhide_article(
+    article_id: UUID,
+    db: AsyncSession = Depends(get_db),
+) -> ArticleResponse:
+    """Unhide an article."""
+    result = await db.execute(select(Article).where(Article.id == article_id))
+    article = result.scalar_one_or_none()
+    if article is None:
+        raise HTTPException(status_code=404, detail="Article not found")
+
+    article.is_hidden = False
+    await db.commit()
+    await db.refresh(article)
+    return ArticleResponse.model_validate(article)

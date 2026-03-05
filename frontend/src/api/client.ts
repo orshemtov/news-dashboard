@@ -44,6 +44,7 @@ export interface ArticleListParams {
   languages_exclude?: string[];
   forwarded?: boolean;
   exclude_keywords?: string[];
+  include_hidden?: boolean;
 }
 
 export const getArticles = (params?: ArticleListParams) =>
@@ -57,6 +58,12 @@ export const getArticle = (id: string) =>
 
 export const deleteArticle = (id: string) =>
   api.delete<void>(`/articles/${id}`);
+
+export const hideArticle = (id: string) =>
+  api.post<ArticleDetail>(`/articles/${id}/hide`).then((r) => r.data);
+
+export const unhideArticle = (id: string) =>
+  api.post<ArticleDetail>(`/articles/${id}/unhide`).then((r) => r.data);
 
 // ---------------------------------------------------------------------------
 // Sources

@@ -12,8 +12,10 @@ echo "Waiting for Postgres to be ready..."
 sleep 5
 (cd backend && uv run alembic upgrade head)
 echo ""
-echo "Setup complete! Run 'mise run dev' to start developing."
-echo "Run 'mise run dev' to start developing."
+echo "Setup complete!"
+echo "Next: Run 'mise run auth' to authenticate with Telegram."
+echo "Then: Run 'mise run ingest' to backfill your dashboard."
+echo "Finally: Run 'mise run dev' to start developing."
 """
 
 [tasks.dev]
@@ -66,3 +68,19 @@ description = "Reset all infrastructure data"
 dir = "{{config_root}}"
 run = "docker compose down -v && docker compose up -d"
 
+[tasks.auth]
+description = "Authenticate with Telegram (interactive)"
+dir = "{{config_root}}"
+run = """
+echo "Authenticating with Telegram..."
+docker exec -it news-dashboard-backend-1 .venv/bin/python -c "import os; from telethon.sync import TelegramClient; client = TelegramClient('/app/sessions/news_dashboard', int(os.getenv('TELEGRAM_API_ID')), os.getenv('TELEGRAM_API_HASH')); client.start()"
+echo "Re-starting backend to apply session..."
+docker restart news-dashboard-backend-1
+"""
+
+[tasks.ingest]
+description = "Manually trigger ingestion/backfill"
+dir = "{{config_root}}"
+run = """
+docker exec -it news-dashboard-backend-1 .venv/bin/python -m app.scripts.manual_ingest --all --backfill-days 7
+"""

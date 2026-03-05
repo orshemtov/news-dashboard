@@ -13,7 +13,10 @@ import {
   Plus,
   Search,
   X,
+  EyeOff,
+  Eye,
   ArrowUpDown,
+  ArrowUp,
   PanelLeftClose,
   PanelLeft,
   Filter,
@@ -21,6 +24,8 @@ import {
 import { cn } from '@/lib/utils';
 import { ArticleCard } from '@/components/feed/ArticleCard';
 import { ArticleDetailDialog } from '@/components/feed/ArticleDetailDialog';
+import { hideArticle, unhideArticle } from '@/api/client';
+import { useQueryClient } from '@tanstack/react-query';
 import { BreakingBar } from '@/components/feed/BreakingBar';
 import { StatsBar } from '@/components/feed/StatsBar';
 import {
@@ -70,11 +75,13 @@ function sourceColor(name: string): string {
 }
 
 export default function Feed() {
+  const queryClient = useQueryClient();
   // SSE: auto-update when new articles arrive
   const { newIds, clearNewId, burst, clearBurst } = useArticleStream();
 
   // Filters
   const [hideDuplicates, setHideDuplicates] = useState(true);
+  const [showHiddenOnly, setShowHiddenOnly] = useState(false);
   const [timeRange, setTimeRange] = useState<number>(() => {
     const saved = localStorage.getItem('news-dashboard-time-range');
     if (saved !== null) {
@@ -99,6 +106,21 @@ export default function Feed() {
   // Article detail
   const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
 
+  // Back to top visibility
+  const [showBackToTop, setShowBackToTop] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setShowBackToTop(window.scrollY > 500);
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+
+  const scrollToTop = () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
   // Compute time filter dates
   const fromDate = useMemo(() => {
     if (timeRange === 0) return undefined;
@@ -109,6 +131,7 @@ export default function Feed() {
   // Build article list params including facet filters
   const articleParams = useMemo(() => ({
     is_duplicate: hideDuplicates ? false : undefined,
+    include_hidden: showHiddenOnly,
     from_date: fromDate,
     to_date: undefined,
     ...(facetFilters.sources_include.length > 0 && {
@@ -120,7 +143,7 @@ export default function Feed() {
     ...(facetFilters.exclude_keywords.length > 0 && {
       exclude_keywords: facetFilters.exclude_keywords,
     }),
-  }), [hideDuplicates, fromDate, facetFilters]);
+  }), [hideDuplicates, showHiddenOnly, fromDate, facetFilters]);
 
   // Feed query (infinite scroll)
   const {
@@ -167,6 +190,24 @@ export default function Feed() {
     setSearchQuery('');
     setIsSearching(false);
     search.reset();
+  };
+
+  const handleHideArticle = async (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    try {
+      if (showHiddenOnly) {
+        await unhideArticle(id);
+      } else {
+        await hideArticle(id);
+      }
+      // Optimistically invalidate and refetch, or just wait for SSE if implemented for hide
+      // For now, manual invalidate is safer
+      queryClient.invalidateQueries({ queryKey: ['articles'] });
+      queryClient.invalidateQueries({ queryKey: ['facets'] });
+      queryClient.invalidateQueries({ queryKey: ['stats'] });
+    } catch (err) {
+      console.error('Failed to update article visibility:', err);
+    }
   };
 
   // Flatten all pages into a single article list
@@ -439,6 +480,18 @@ export default function Feed() {
               Hide dupes
             </label>
 
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0">
+              <input
+                type="checkbox"
+                checked={showHiddenOnly}
+                onChange={(e) => {
+                  setShowHiddenOnly(e.target.checked);
+                }}
+                className="rounded border-input"
+              />
+              Show hidden only
+            </label>
+
             <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
               {total} article{total !== 1 ? 's' : ''}
               {isSearching && search.data
@@ -505,7 +558,9 @@ export default function Feed() {
               <ArticleCard
                 article={lead}
                 onClick={() => setSelectedArticle(lead)}
+                onHide={(e) => handleHideArticle(lead.id, e)}
                 isNew={newIds.has(lead.id)}
+                isHiddenOnlyMode={showHiddenOnly}
                 onAnimationEnd={() => clearNewId(lead.id)}
               />
               {variations.length > 0 && (
@@ -513,16 +568,24 @@ export default function Feed() {
                   <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground/50 self-center">
                     Also from:
                   </span>
-                  {variations.map((v) => (
-                    <button
-                      key={v.id}
-                      onClick={() => setSelectedArticle(v)}
-                      className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-card/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:border-primary/30 hover:bg-accent/50 hover:text-foreground transition-all"
-                    >
-                      <span className={cn('size-1.5 shrink-0 rounded-full', sourceColor(v.source_name))} />
-                      {v.source_name}
-                    </button>
-                  ))}
+                    {variations.map((v) => (
+                      <div key={v.id} className="group/variation relative flex items-center">
+                        <button
+                          onClick={() => setSelectedArticle(v)}
+                          className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-card/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:border-primary/30 hover:bg-accent/50 hover:text-foreground transition-all pr-5"
+                        >
+                          <span className={cn('size-1.5 shrink-0 rounded-full', sourceColor(v.source_name))} />
+                          {v.source_name}
+                        </button>
+                        <button
+                          onClick={(e) => handleHideArticle(v.id, e)}
+                          className="absolute right-1 text-muted-foreground/0 group-variation:text-muted-foreground hover:!text-destructive transition-all"
+                          title={showHiddenOnly ? "Unhide variation" : "Hide variation"}
+                        >
+                          {showHiddenOnly ? <Eye className="size-2.5" /> : <EyeOff className="size-2.5" />}
+                        </button>
+                      </div>
+                    ))}
                 </div>
               )}
             </div>
@@ -548,6 +611,20 @@ export default function Feed() {
           article={selectedArticle}
           onClose={() => setSelectedArticle(null)}
         />
+
+        {/* Back to top button */}
+        <Button
+          variant="secondary"
+          size="icon"
+          className={cn(
+            'fixed bottom-20 right-6 z-50 rounded-full shadow-lg transition-all duration-300 md:bottom-8',
+            showBackToTop ? 'translate-y-0 opacity-100' : 'translate-y-10 opacity-0 pointer-events-none'
+          )}
+          onClick={scrollToTop}
+          title="Back to top"
+        >
+          <ArrowUp className="size-5" />
+        </Button>
       </div>
     </div>
   );

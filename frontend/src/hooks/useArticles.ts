@@ -24,6 +24,7 @@ export function useArticles(params?: Omit<ArticleListParams, 'page' | 'page_size
       const totalPages = Math.ceil(lastPage.total / PAGE_SIZE);
       return lastPage.page < totalPages ? lastPage.page + 1 : undefined;
     },
+    refetchInterval: 30000, // Refetch every 30 seconds as a fallback for SSE
   });
 }
 

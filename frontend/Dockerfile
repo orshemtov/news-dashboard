@@ -1,5 +1,5 @@
 ### Stage 1: Build ###
-FROM --platform=linux/amd64 node:22-slim AS builder
+FROM node:22-slim AS builder
 
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
@@ -20,7 +20,7 @@ ENV VITE_API_BASE_URL=${VITE_API_BASE_URL}
 RUN pnpm build
 
 ### Stage 2: Serve ###
-FROM --platform=linux/amd64 nginx:alpine AS serve
+FROM nginx:alpine AS serve
 
 COPY --from=builder /app/dist /usr/share/nginx/html
 

@@ -42,6 +42,7 @@ class ArticleResponse(ArticleBase):
     summary: str | None = None
     ingested_at: datetime
     is_duplicate: bool = False
+    is_hidden: bool = False
     dedup_cluster_id: UUID | None = None
     metadata_: dict = {}
     media_attachments: list[MediaAttachment] = []
