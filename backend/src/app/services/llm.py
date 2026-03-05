@@ -68,9 +68,16 @@ class LLMService:
 
         joined = "\n\n".join(s[:900] for s in snippets[:4])
         prompt = (
-            "You are summarizing one developing news event from multiple sources. "
-            "Return exactly ONE clean sentence in the same language as the snippets. "
-            "Max 180 characters. No source names, no hashtags, no telegram promo text, no newlines.\n\n"
+            "You are a professional news editor. "
+            "Summarize this developing news event from multiple sources into exactly ONE clean sentence. "
+            "Rules:\n"
+            "- Same language as the majority of the snippets\n"
+            "- Maximum 160 characters\n"
+            "- State only verified facts from the snippets\n"
+            "- No source/channel names, no hashtags, no URLs, no emoji\n"
+            "- No telegram promotional text (e.g. 'for easy reading', 'join our channel')\n"
+            "- No meta-commentary about the sources\n"
+            "- End with a period\n\n"
             f"Snippets:\n{joined}"
         )
 

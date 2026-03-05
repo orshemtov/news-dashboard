@@ -149,7 +149,13 @@ async def start_realtime_listener(client: TelegramClient) -> None:
                     from app.services.dedup import DedupService
 
                     dedup_svc = DedupService(db)
-                    similar = await dedup_svc.check_semantic_duplicate(embedding)
+                    # Build a transient Article for semantic comparison
+                    # (not yet added to session)
+                    candidate = Article(
+                        content=content,
+                        embedding=embedding,
+                    )
+                    similar = await dedup_svc.check_semantic_duplicate(candidate)
                     if similar is not None:
                         is_duplicate = True
                         dedup_cluster_id = await dedup_svc.find_or_create_cluster(similar)

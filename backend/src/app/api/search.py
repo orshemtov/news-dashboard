@@ -9,7 +9,7 @@ from app.services.search import SearchService
 router = APIRouter(tags=["search"])
 
 
-@router.post("/", response_model=SearchResponse)
+@router.post("", response_model=SearchResponse)
 async def search_articles(
     body: SearchRequest,
     db: AsyncSession = Depends(get_db),

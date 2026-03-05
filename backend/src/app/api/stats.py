@@ -29,7 +29,7 @@ async def get_trending_themes(
     )
 
 
-@router.get("/", response_model=DashboardStats)
+@router.get("", response_model=DashboardStats)
 async def get_dashboard_stats(
     db: AsyncSession = Depends(get_db),
 ) -> DashboardStats:

@@ -82,7 +82,7 @@ _PRESETS: list[SourcePreset] = [
 ]
 
 
-@router.get("/", response_model=list[SourceResponse])
+@router.get("", response_model=list[SourceResponse])
 async def list_sources(
     db: AsyncSession = Depends(get_db),
 ) -> list[SourceResponse]:
@@ -92,7 +92,7 @@ async def list_sources(
     return [SourceResponse.model_validate(s) for s in sources]
 
 
-@router.post("/", response_model=SourceResponse, status_code=201)
+@router.post("", response_model=SourceResponse, status_code=201)
 async def create_source(
     body: SourceCreate,
     db: AsyncSession = Depends(get_db),

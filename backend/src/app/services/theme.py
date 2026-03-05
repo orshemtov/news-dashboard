@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import func, select
@@ -8,6 +9,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.article import Article
 from app.services.llm import LLMService
+
+# Module-level TTL cache for trending themes
+_theme_cache: dict[str, tuple[float, list[dict]]] = {}
+_CACHE_TTL_SECONDS = 120  # 2 minutes
 
 
 class ThemeService:
@@ -17,20 +22,105 @@ class ThemeService:
         self.db = db
         self._llm = LLMService()
 
+    # Common Telegram noise phrases to strip (Hebrew + English)
+    _NOISE_PATTERNS: list[re.Pattern[str]] = [
+        re.compile(p, re.IGNORECASE)
+        for p in [
+            # Hebrew telegram promo / CTA
+            r"לקריאת נוחה בנייד",
+            r"לקריאה נוחה בנייד",
+            r"לקריאת הכתבה המלאה",
+            r"לכתבה המלאה",
+            r"הצטרפו לערוץ",
+            r"הצטרפו לקבוצה",
+            r"הצטרפו אלינו",
+            r"עקבו אחרינו",
+            r"לפרטים נוספים",
+            r"שתפו את הפוסט",
+            r"📲\s*הצטרפו",
+            r"👆\s*הצטרפו",
+            r"⬆️\s*הצטרפו",
+            r"🔴\s*",
+            r"🚨\s*",
+            r"⚡\s*",
+            r"🔵\s*",
+            r"📢\s*",
+            r"🔔\s*",
+            r"👇\s*",
+            # English telegram promo / CTA
+            r"join our channel",
+            r"join our group",
+            r"follow us on",
+            r"subscribe to",
+            r"click here",
+            r"read more at",
+            r"for easy reading",
+            r"for comfortable reading",
+            # Common telegram channel signatures
+            r"@\w{4,}",  # @channel_name
+            r"t\.me/\S+",  # t.me/channel links
+        ]
+    ]
+
     def _clean_snippet(self, text: str) -> str:
         """Normalize noisy telegram content before theme summarization."""
         cleaned = text.replace("\n", " ")
+        # Remove URLs
         cleaned = re.sub(r"https?://\S+", "", cleaned)
+        # Remove telegram noise phrases
+        for pattern in self._NOISE_PATTERNS:
+            cleaned = pattern.sub("", cleaned)
+        # Remove leftover emoji sequences (3+ consecutive emoji)
+        cleaned = re.sub(
+            r"[\U0001F300-\U0001F9FF\U00002600-\U000027BF\U0000FE00-\U0000FE0F\U0000200D]{3,}",
+            " ",
+            cleaned,
+        )
+        # Collapse whitespace
         cleaned = re.sub(r"\s+", " ", cleaned).strip()
         return cleaned[:420]
 
-    def _fallback_theme_summary(self, snippets: list[str], title: str | None) -> str:
-        """Create a concise fallback summary when LLM is unavailable."""
-        base = title or (snippets[0] if snippets else "Trending event")
-        base = self._clean_snippet(base)
-        if len(base) > 180:
-            base = base[:177] + "..."
-        return base
+    def _build_theme_display(self, lead: Article, snippets: list[str]) -> str:
+        """Build a clean theme display string from the lead article.
+
+        Priority: title > first sentence of content > cleaned snippet.
+        No LLM involved — the local model is too weak for Hebrew text generation.
+        """
+        # 1. Title is usually the cleanest source
+        if lead.title:
+            cleaned = self._clean_snippet(lead.title)
+            if len(cleaned) >= 20:
+                return cleaned[:200]
+
+        # 2. Use the lead article's existing summary (set during ingestion)
+        if lead.summary:
+            cleaned = self._clean_snippet(lead.summary)
+            if len(cleaned) >= 20:
+                return cleaned[:200]
+
+        # 3. Extract first sentence from content
+        if lead.content:
+            cleaned = self._clean_snippet(lead.content)
+            # Try to cut at first sentence boundary
+            for sep in [".", "。", "。", "!", "?"]:
+                idx = cleaned.find(sep)
+                if 20 <= idx <= 200:
+                    return cleaned[: idx + 1]
+            # No good sentence boundary — just truncate
+            if len(cleaned) > 200:
+                # Try to break at a word boundary
+                truncated = cleaned[:200]
+                last_space = truncated.rfind(" ")
+                if last_space > 100:
+                    return truncated[:last_space] + "..."
+                return truncated + "..."
+            return cleaned
+
+        # 4. Fallback to first available snippet
+        if snippets:
+            return snippets[0][:200]
+
+        return "Trending event"
 
     async def get_trending_themes(
         self,
@@ -40,7 +130,15 @@ class ThemeService:
     ) -> list[dict]:
         """
         Identify top clusters from the last X minutes and generate catchy themes.
+        Results are cached for 2 minutes to avoid hammering the LLM.
         """
+        cache_key = f"{window_minutes}:{limit}:{min_sources}"
+        now_ts = time.monotonic()
+        if cache_key in _theme_cache:
+            cached_ts, cached_result = _theme_cache[cache_key]
+            if now_ts - cached_ts < _CACHE_TTL_SECONDS:
+                return cached_result
+
         cutoff = datetime.now(tz=UTC) - timedelta(minutes=window_minutes)
         pool_limit = max(limit * 3, 30)
 
@@ -101,16 +199,8 @@ class ThemeService:
             )
             snippets = [self._clean_snippet(s) for s in snippets_result.scalars().all() if s]
 
-            # Prefer LLM event summary for themes (not raw content)
-            llm_theme = await self._llm.summarize_theme(snippets)
-            if llm_theme:
-                display_theme = self._clean_snippet(llm_theme)
-            elif lead.summary:
-                display_theme = self._clean_snippet(lead.summary)
-            elif lead.title:
-                display_theme = self._clean_snippet(lead.title)
-            else:
-                display_theme = self._fallback_theme_summary(snippets, lead.title)
+            # Use cleaned lead content (no LLM text generation — too weak for Hebrew)
+            display_theme = self._build_theme_display(lead, snippets)
 
             if len(display_theme) > 340:
                 display_theme = display_theme[:337] + "..."
@@ -154,7 +244,7 @@ class ThemeService:
         )
 
         trimmed = ranked[:limit]
-        return [
+        result = [
             {
                 "id": t["id"],
                 "theme": t["theme"],
@@ -165,3 +255,7 @@ class ThemeService:
             }
             for t in trimmed
         ]
+
+        # Cache the result
+        _theme_cache[cache_key] = (now_ts, result)
+        return result
