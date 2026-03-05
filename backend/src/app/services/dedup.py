@@ -44,11 +44,30 @@ class DedupService:
         threshold = self._settings.dedup_similarity_threshold
         window_hours = self._settings.dedup_window_hours
 
-        query = text("""
+        # Build exclusion clause conditionally to avoid asyncpg
+        # AmbiguousParameterError when target_id is None (unsaved article).
+        target_id = target_article.id
+        if target_id is not None:
+            exclude_clause = "AND id != :target_id"
+            params: dict = {
+                "target_id": target_id,
+                "target_embedding": str(target_article.embedding),
+                "threshold": threshold,
+                "window_hours": window_hours,
+            }
+        else:
+            exclude_clause = ""
+            params = {
+                "target_embedding": str(target_article.embedding),
+                "threshold": threshold,
+                "window_hours": window_hours,
+            }
+
+        query = text(f"""
             SELECT id
             FROM articles
             WHERE is_duplicate = false
-              AND (:target_id IS NULL OR id != :target_id)
+              {exclude_clause}
               AND embedding IS NOT NULL
               AND published_at > now() - make_interval(hours => :window_hours)
               AND 1 - (embedding <=> cast(:target_embedding AS vector)) > :threshold
@@ -56,15 +75,7 @@ class DedupService:
             LIMIT 1
         """)
 
-        result = await self.db.execute(
-            query,
-            {
-                "target_id": target_article.id,
-                "target_embedding": str(target_article.embedding),
-                "threshold": threshold,
-                "window_hours": window_hours,
-            },
-        )
+        result = await self.db.execute(query, params)
         row = result.first()
         if row is None:
             return None

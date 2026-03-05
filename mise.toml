@@ -54,7 +54,7 @@ run = "docker compose down"
 description = "Update local IP and start dashboard for local network access"
 dir = "{{config_root}}"
 run = """
-./local-ip.sh && \\
+./scripts/local-ip.sh && \\
 docker compose up --build -d
 """
 

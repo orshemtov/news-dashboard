@@ -60,14 +60,14 @@ Search for any public Telegram channel and add it with one click:
 
 ## Tech Stack
 
-| Layer | Technology |
-|-------|-----------|
-| Backend | Python 3.13, FastAPI, SQLAlchemy (async) + asyncpg, Alembic |
-| Frontend | React 19, TypeScript, Vite 7, Tailwind CSS 4, shadcn/ui |
-| Database | PostgreSQL 16 with pgvector (384-dim embeddings) |
-| Embeddings | sentence-transformers (paraphrase-multilingual-MiniLM-L12-v2) |
-| LLM | PydanticAI + Ollama (OpenAI-compatible endpoint) |
-| Task Runner | [mise](https://mise.jdx.dev/) |
+| Layer       | Technology                                                    |
+| ----------- | ------------------------------------------------------------- |
+| Backend     | Python 3.13, FastAPI, SQLAlchemy (async) + asyncpg, Alembic   |
+| Frontend    | React 19, TypeScript, Vite 7, Tailwind CSS 4, shadcn/ui       |
+| Database    | PostgreSQL 16 with pgvector (384-dim embeddings)              |
+| Embeddings  | sentence-transformers (paraphrase-multilingual-MiniLM-L12-v2) |
+| LLM         | PydanticAI + Ollama (OpenAI-compatible endpoint)              |
+| Task Runner | [mise](https://mise.jdx.dev/)                                 |
 
 ## Prerequisites
 
@@ -89,6 +89,7 @@ mise run setup
 ```
 
 This will:
+
 1. Copy `.env.example` to `.env`
 2. Install backend (uv) and frontend (pnpm) dependencies
 3. Start Docker services (PostgreSQL)
@@ -112,8 +113,9 @@ mise run dev
 ```
 
 This starts infrastructure (Docker), runs migrations, and launches:
-- **Backend API** at http://localhost:8000
-- **Frontend** at http://localhost:5173
+
+- **Backend API** at <http://localhost:8000>
+- **Frontend** at <http://localhost:5173>
 
 ### Deploy with Docker Compose
 
@@ -138,7 +140,7 @@ mise run serve
 
 ### Adding news sources
 
-1. Open http://localhost:5173
+1. Open <http://localhost:5173>
 2. Go to **Sources**
 3. Search for a Telegram channel and click **Add**
 4. Articles begin ingesting immediately
@@ -174,24 +176,24 @@ All configuration is through environment variables in `.env`. The defaults in `.
 
 ### All Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `DATABASE_URL` | `postgresql+asyncpg://postgres:postgres@localhost:5432/news_dashboard` | PostgreSQL connection string |
-| `EMBEDDING_MODEL` | `paraphrase-multilingual-MiniLM-L12-v2` | Embedding model (sentence-transformers) |
-| `EMBEDDING_DIMENSIONS` | `384` | Embedding vector dimensions |
-| `DEDUP_SIMILARITY_THRESHOLD` | `0.92` | Cosine similarity threshold for dedup |
-| `DEDUP_WINDOW_HOURS` | `24` | Time window for dedup comparison |
-| `TELEGRAM_API_ID` | | Telegram API ID |
-| `TELEGRAM_API_HASH` | | Telegram API hash |
-| `TELEGRAM_SESSION_NAME` | `news_dashboard` | Telethon session file name |
-| `TELEGRAM_POLL_INTERVAL_SECONDS` | `60` | Telegram polling interval |
-| `INITIAL_BACKFILL_HOURS` | `24` | Hours of history to backfill on first run |
-| `POLLING_ENABLED` | `true` | Enable/disable source polling |
-| `POLLING_INTERVAL_SECONDS` | `300` | Source polling interval |
-| `LLM_ENABLED` | `true` | Enable LLM features (summaries, dedup verification, trending ranking) |
-| `LLM_MODEL` | `ollama/deepseek-v2:lite` | Local Ollama model name |
-| `LLM_API_BASE` | | Ollama base URL (e.g. `http://localhost:11434` or `http://host.docker.internal:11434`) |
-| `LLM_DEDUP_VERIFY` | `true` | Use LLM to confirm semantic duplicates |
+| Variable                         | Default                                                                | Description                                                                            |
+| -------------------------------- | ---------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
+| `DATABASE_URL`                   | `postgresql+asyncpg://postgres:postgres@localhost:5432/news_dashboard` | PostgreSQL connection string                                                           |
+| `EMBEDDING_MODEL`                | `paraphrase-multilingual-MiniLM-L12-v2`                                | Embedding model (sentence-transformers)                                                |
+| `EMBEDDING_DIMENSIONS`           | `384`                                                                  | Embedding vector dimensions                                                            |
+| `DEDUP_SIMILARITY_THRESHOLD`     | `0.92`                                                                 | Cosine similarity threshold for dedup                                                  |
+| `DEDUP_WINDOW_HOURS`             | `24`                                                                   | Time window for dedup comparison                                                       |
+| `TELEGRAM_API_ID`                |                                                                        | Telegram API ID                                                                        |
+| `TELEGRAM_API_HASH`              |                                                                        | Telegram API hash                                                                      |
+| `TELEGRAM_SESSION_NAME`          | `news_dashboard`                                                       | Telethon session file name                                                             |
+| `TELEGRAM_POLL_INTERVAL_SECONDS` | `60`                                                                   | Telegram polling interval                                                              |
+| `INITIAL_BACKFILL_HOURS`         | `24`                                                                   | Hours of history to backfill on first run                                              |
+| `POLLING_ENABLED`                | `true`                                                                 | Enable/disable source polling                                                          |
+| `POLLING_INTERVAL_SECONDS`       | `300`                                                                  | Source polling interval                                                                |
+| `LLM_ENABLED`                    | `true`                                                                 | Enable LLM features (summaries, dedup verification, trending ranking)                  |
+| `LLM_MODEL`                      | `ollama/deepseek-v2:lite`                                              | Local Ollama model name                                                                |
+| `LLM_API_BASE`                   |                                                                        | Ollama base URL (e.g. `http://localhost:11434` or `http://host.docker.internal:11434`) |
+| `LLM_DEDUP_VERIFY`               | `true`                                                                 | Use LLM to confirm semantic duplicates                                                 |
 
 ## Architecture
 
