@@ -227,17 +227,27 @@ async def ingest_source(
 
             # Semantic dedup: check each new article against existing articles
             from app.services.dedup import DedupService
+            from app.services.llm import LLMService
 
             dedup_svc = DedupService(db)
+            llm_svc = LLMService()
             dedup_count = 0
             for article in new_articles:
                 if article.embedding is None:
                     continue
-                similar = await dedup_svc.check_semantic_duplicate(article.embedding)
+                similar = await dedup_svc.check_semantic_duplicate(article)
                 if similar is not None:
                     article.is_duplicate = True
                     article.dedup_cluster_id = await dedup_svc.find_or_create_cluster(similar)
                     dedup_count += 1
+                else:
+                    # Not a duplicate? Generate a summary for the new cluster lead
+                    if settings.llm_enabled:
+                        summary = await llm_svc.summarize(article.content)
+                        if summary:
+                            article.summary = summary
+                            logger.info("Generated summary for article {}", article.id)
+
             if dedup_count:
                 logger.info(
                     "Source {}: marked {} articles as semantic duplicates",

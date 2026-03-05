@@ -13,30 +13,11 @@
         "postgresql://postgres:postgres@localhost:5432/news_dashboard"
       ],
       "enabled": true
-    },
-    "context7": {
-      "type": "remote",
-      "url": "https://mcp.context7.com/mcp"
-    }
-  },
-  "lsp": {
-    "pyright": {
-      "disabled": true
-    },
-    "ty": {
-      "command": ["uvx", "ty", "server"],
-      "extensions": [".py", ".pyi"]
     }
   },
   "instructions": ["AGENTS.md", "IMPROVE.md"],
   "formatter": {
-    "ruff": {
-      "command": ["uv", "run", "ruff", "format", "$FILE"],
-      "extensions": [".py"]
-    },
-    "prettier": {
-      "command": ["pnpm", "--dir", "frontend", "exec", "prettier", "--write", "$FILE"],
-      "extensions": [".ts", ".tsx", ".js", ".jsx", ".css", ".json"]
-    }
+    "ruff": { "command": ["uv", "run", "ruff", "format", "$FILE"], "extensions": [".py"] },
+    "prettier": { "command": ["pnpm", "--dir", "frontend", "exec", "prettier", "--write", "$FILE"], "extensions": [".ts", ".tsx", ".js", ".jsx", ".css", ".json"] }
   }
 }

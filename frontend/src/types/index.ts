@@ -179,3 +179,8 @@ export interface DashboardStats {
   languages: Record<string, number>;
   latest_ingestion: string | null;
 }
+
+export interface HealthStatus {
+  status: 'ok' | 'error';
+  telegram: 'connected' | 'unauthorized' | 'unconfigured' | 'error';
+}

@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import Settings, get_settings
 from app.models.article import Article
+from app.services.llm import LLMService
 
 
 class DedupService:
@@ -14,6 +15,7 @@ class DedupService:
     def __init__(self, db: AsyncSession, settings: Settings | None = None) -> None:
         self.db = db
         self._settings = settings or get_settings()
+        self._llm = LLMService()
 
     # ------------------------------------------------------------------
     # Exact dedup
@@ -29,12 +31,16 @@ class DedupService:
     # Semantic dedup
     # ------------------------------------------------------------------
 
-    async def check_semantic_duplicate(self, embedding: list[float]) -> Article | None:
+    async def check_semantic_duplicate(self, target_article: Article) -> Article | None:
         """Find a semantically similar article using pgvector cosine distance.
 
         Searches articles published within the configured dedup window and
         returns the first match whose cosine similarity exceeds the threshold.
+        If LLM verification is enabled, verifies the match with an LLM.
         """
+        if not target_article.embedding:
+            return None
+
         threshold = self._settings.dedup_similarity_threshold
         window_hours = self._settings.dedup_window_hours
 
@@ -42,6 +48,7 @@ class DedupService:
             SELECT id
             FROM articles
             WHERE is_duplicate = false
+              AND (:target_id IS NULL OR id != :target_id)
               AND embedding IS NOT NULL
               AND published_at > now() - make_interval(hours => :window_hours)
               AND 1 - (embedding <=> cast(:target_embedding AS vector)) > :threshold
@@ -52,7 +59,8 @@ class DedupService:
         result = await self.db.execute(
             query,
             {
-                "target_embedding": str(embedding),
+                "target_id": target_article.id,
+                "target_embedding": str(target_article.embedding),
                 "threshold": threshold,
                 "window_hours": window_hours,
             },
@@ -61,8 +69,25 @@ class DedupService:
         if row is None:
             return None
 
-        # Load the full Article ORM object
-        return await self.db.get(Article, row.id)
+        # Load the full candidate Article ORM object
+        candidate = await self.db.get(Article, row.id)
+        if not candidate:
+            return None
+
+        # Optional LLM-assisted verification
+        if self._settings.llm_enabled and self._settings.llm_dedup_verify:
+            is_same = await self._llm.verify_is_same_event(
+                target_article.content, candidate.content
+            )
+            if not is_same:
+                logger.info(
+                    "LLM rejected semantic match between {} and {}",
+                    target_article.id,
+                    candidate.id,
+                )
+                return None
+
+        return candidate
 
     # ------------------------------------------------------------------
     # Clustering

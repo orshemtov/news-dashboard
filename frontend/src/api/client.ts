@@ -13,6 +13,7 @@ import type {
   SourceTestRequest,
   SourceTestResponse,
   SourceUpdate,
+  HealthStatus,
 } from '@/types';
 
 const api = axios.create({
@@ -44,6 +45,7 @@ export interface ArticleListParams {
   languages_exclude?: string[];
   forwarded?: boolean;
   exclude_keywords?: string[];
+  dedup_cluster_id?: string;
   include_hidden?: boolean;
 }
 
@@ -116,5 +118,8 @@ export const searchArticles = (data: SearchRequest) =>
 
 export const getStats = () =>
   api.get<DashboardStats>('/stats').then((r) => r.data);
+
+export const getHealth = () =>
+  api.get<HealthStatus>('/health').then((r) => r.data);
 
 export default api;

@@ -23,11 +23,11 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ArticleCard } from '@/components/feed/ArticleCard';
-import { ArticleDetailDialog } from '@/components/feed/ArticleDetailDialog';
 import { hideArticle, unhideArticle } from '@/api/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { BreakingBar } from '@/components/feed/BreakingBar';
 import { StatsBar } from '@/components/feed/StatsBar';
+import { TrendingThemes } from '@/components/feed/TrendingThemes';
 import {
   FacetSidebar,
   EMPTY_FACET_FILTERS,
@@ -102,9 +102,7 @@ export default function Feed() {
   // Search
   const [searchQuery, setSearchQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
-
-  // Article detail
-  const [selectedArticle, setSelectedArticle] = useState<Article | null>(null);
+  const [selectedClusterId, setSelectedClusterId] = useState<string | null>(null);
 
   // Back to top visibility
   const [showBackToTop, setShowBackToTop] = useState(false);
@@ -134,6 +132,7 @@ export default function Feed() {
     include_hidden: showHiddenOnly,
     from_date: fromDate,
     to_date: undefined,
+    ...(selectedClusterId && { dedup_cluster_id: selectedClusterId }),
     ...(facetFilters.sources_include.length > 0 && {
       sources_include: facetFilters.sources_include,
     }),
@@ -143,7 +142,7 @@ export default function Feed() {
     ...(facetFilters.exclude_keywords.length > 0 && {
       exclude_keywords: facetFilters.exclude_keywords,
     }),
-  }), [hideDuplicates, showHiddenOnly, fromDate, facetFilters]);
+  }), [hideDuplicates, showHiddenOnly, fromDate, selectedClusterId, facetFilters]);
 
   // Feed query (infinite scroll)
   const {
@@ -310,15 +309,15 @@ export default function Feed() {
   }, [sortedArticles, hideDuplicates, sortOrder]);
 
   return (
-    <div className="flex gap-0">
+    <div className="flex gap-4">
       {/* Facet Sidebar — always in DOM, width transitions to avoid layout jump */}
       <aside
         className={cn(
-          'hidden shrink-0 overflow-hidden transition-all duration-200 md:block',
+          'hidden shrink-0 transition-all duration-200 md:block',
           sidebarOpen ? 'w-60' : 'w-0',
         )}
       >
-        <div className="sticky top-16 h-[calc(100vh-4rem)] w-60">
+        <div className="sticky top-16 h-[calc(100vh-4rem)]">
           <FacetSidebar
             facets={facets}
             filters={facetFilters}
@@ -335,12 +334,28 @@ export default function Feed() {
           <BreakingBar 
             burst={burst} 
             onClose={clearBurst} 
-            onClick={() => setSelectedArticle(burst.lead_article)} 
+            onClick={() => {
+              if (burst.lead_article.url) {
+                window.open(burst.lead_article.url, '_blank', 'noopener,noreferrer');
+              }
+            }} 
           />
         )}
 
         {/* Stats Bar */}
         <StatsBar />
+
+        {/* Trending Themes (Mobile/Tablet) */}
+        <div className="lg:hidden">
+          <TrendingThemes
+            sticky={false}
+            onThemeClick={(clusterId) => {
+              setSelectedClusterId(clusterId);
+              setHideDuplicates(false);
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+            }}
+          />
+        </div>
 
         {/* Search Bar */}
         <div className="flex gap-2">
@@ -492,26 +507,42 @@ export default function Feed() {
               Show hidden only
             </label>
 
-            <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
-              {total} article{total !== 1 ? 's' : ''}
-              {isSearching && search.data
-                ? ` for "${search.data.query}"`
-                : ''}
-            </span>
+            {isSearching && search.data && (
+              <span className="ml-auto text-xs text-muted-foreground whitespace-nowrap">
+                Results for "{search.data.query}"
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Loading (initial) */}
-        {(isLoading || search.isPending) && (
-          <div className="flex justify-center py-12">
-            <Loader2 className="size-6 animate-spin text-muted-foreground" />
+        {selectedClusterId && (
+          <div className="flex items-center gap-2 rounded-lg border border-orange-500/30 bg-orange-500/10 px-3 py-2 text-xs">
+            <span className="font-medium text-orange-600">Theme filter active</span>
+            <span className="truncate text-muted-foreground">Showing articles for selected trending theme</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-7 px-2 text-xs"
+              onClick={() => setSelectedClusterId(null)}
+            >
+              Clear
+            </Button>
           </div>
         )}
-        {(isError || search.isError) && (
-          <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
-            Failed to load articles. The backend may be unavailable.
-          </div>
-        )}
+
+        <div className="flex items-start gap-4">
+          <div className="min-w-0 flex-1">
+            {/* Loading (initial) */}
+            {((isLoading && !data) || search.isPending) && (
+              <div className="flex justify-center py-12">
+                <Loader2 className="size-6 animate-spin text-muted-foreground" />
+              </div>
+            )}
+            {(isError || search.isError) && (
+              <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm text-destructive">
+                Failed to load articles. The backend may be unavailable.
+              </div>
+            )}
 
         {/* Empty State */}
         {!isLoading &&
@@ -552,14 +583,15 @@ export default function Feed() {
           )}
 
         {/* Article Cards */}
-        <div className="mx-auto grid max-w-3xl gap-3">
+        <div className="grid gap-3">
           {groupedArticles.map(({ lead, variations }) => (
             <div key={lead.id} className="space-y-1">
               <ArticleCard
                 article={lead}
-                onClick={() => setSelectedArticle(lead)}
                 onHide={(e) => handleHideArticle(lead.id, e)}
                 isNew={newIds.has(lead.id)}
+                isTrending={variations.length > 0}
+                trendCount={variations.length + 1}
                 isHiddenOnlyMode={showHiddenOnly}
                 onAnimationEnd={() => clearNewId(lead.id)}
               />
@@ -571,7 +603,11 @@ export default function Feed() {
                     {variations.map((v) => (
                       <div key={v.id} className="group/variation relative flex items-center">
                         <button
-                          onClick={() => setSelectedArticle(v)}
+                          onClick={() => {
+                            if (v.url) {
+                              window.open(v.url, '_blank', 'noopener,noreferrer');
+                            }
+                          }}
                           className="inline-flex items-center gap-1 rounded-full border border-border/40 bg-card/40 px-2 py-0.5 text-[11px] font-medium text-muted-foreground hover:border-primary/30 hover:bg-accent/50 hover:text-foreground transition-all pr-5"
                         >
                           <span className={cn('size-1.5 shrink-0 rounded-full', sourceColor(v.source_name))} />
@@ -592,25 +628,31 @@ export default function Feed() {
           ))}
         </div>
 
-        {/* Infinite scroll sentinel */}
-        {!isSearching && (
-          <div ref={sentinelRef} className="flex justify-center py-4">
-            {isFetchingNextPage && (
-              <Loader2 className="size-5 animate-spin text-muted-foreground" />
-            )}
-            {!hasNextPage && sortedArticles.length > 0 && (
-              <span className="text-xs text-muted-foreground/50">
-                End of feed
-              </span>
+            {/* Infinite scroll sentinel */}
+            {!isSearching && (
+              <div ref={sentinelRef} className="flex justify-center py-4">
+                {isFetchingNextPage && (
+                  <Loader2 className="size-5 animate-spin text-muted-foreground" />
+                )}
+                {!hasNextPage && sortedArticles.length > 0 && (
+                  <span className="text-xs text-muted-foreground/50">
+                    End of feed
+                  </span>
+                )}
+              </div>
             )}
           </div>
-        )}
-
-        {/* Article Detail Dialog */}
-        <ArticleDetailDialog
-          article={selectedArticle}
-          onClose={() => setSelectedArticle(null)}
-        />
+          {/* Trending Themes Sidebar (Right) */}
+          <aside className="hidden w-72 shrink-0 self-start lg:block xl:w-80">
+            <TrendingThemes
+              onThemeClick={(clusterId) => {
+                setSelectedClusterId(clusterId);
+                setHideDuplicates(false);
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            />
+          </aside>
+        </div>
 
         {/* Back to top button */}
         <Button

@@ -3,13 +3,38 @@ import { Link, useLocation } from 'react-router-dom';
 import { Activity, Radio, Moon, Sun } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
+import { useHealth } from '@/hooks/useHealth';
 
 
 export function Header() {
   const location = useLocation();
+  const { data: health, isError: healthError } = useHealth();
   const [dark, setDark] = useState(() =>
     document.documentElement.classList.contains('dark'),
   );
+
+  const buildTime = new Date(__APP_BUILD_TIME__);
+  const buildLabel = Number.isNaN(buildTime.getTime())
+    ? __APP_VERSION__
+    : `v${__APP_VERSION__} ${buildTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+
+  const healthState = healthError
+    ? 'offline'
+    : health?.status === 'ok'
+      ? 'online'
+      : 'degraded';
+  const healthClass =
+    healthState === 'online'
+      ? 'bg-emerald-500'
+      : healthState === 'degraded'
+        ? 'bg-amber-500'
+        : 'bg-rose-500';
+  const healthText =
+    healthState === 'online'
+      ? `Backend online${health?.telegram ? ` • Telegram ${health.telegram}` : ''}`
+      : healthState === 'degraded'
+        ? `Backend degraded${health?.telegram ? ` • Telegram ${health.telegram}` : ''}`
+        : 'Backend offline';
 
   useEffect(() => {
     document.documentElement.classList.toggle('dark', dark);
@@ -45,13 +70,21 @@ export function Header() {
           <span className="text-lg font-bold tracking-tight bg-gradient-to-r from-foreground to-foreground/70 bg-clip-text text-transparent">
             Pulse
           </span>
+          <span className="hidden rounded-full border border-border/50 bg-muted/40 px-2 py-0.5 text-[10px] font-medium text-muted-foreground sm:inline">
+            {buildLabel}
+          </span>
         </Link>
 
         {/* Desktop Nav */}
         <div className="hidden md:flex items-center gap-1">
           {navItem('/', <Activity className="size-3.5" />, 'Feed')}
           {navItem('/sources', <Radio className="size-3.5" />, 'Sources')}
-          
+
+          <div className="flex items-center gap-1.5 rounded-full border border-border/50 bg-muted/30 px-2 py-1 text-[11px] text-muted-foreground" title={healthText}>
+            <span className={cn('inline-block size-2 rounded-full', healthClass)} />
+            <span className="uppercase tracking-wide">{healthState}</span>
+          </div>
+
           <div className="mx-2 h-4 w-px bg-border/50" />
           
           <Button
@@ -66,7 +99,11 @@ export function Header() {
         </div>
 
         {/* Mobile Theme Toggle */}
-        <div className="flex md:hidden items-center">
+        <div className="flex md:hidden items-center gap-2">
+          <span className="rounded-full border border-border/50 bg-muted/30 px-1.5 py-0.5 text-[10px] text-muted-foreground" title={healthText}>
+            <span className={cn('mr-1 inline-block size-1.5 rounded-full align-middle', healthClass)} />
+            {healthState}
+          </span>
           <Button
             variant="ghost"
             size="icon"

@@ -34,6 +34,7 @@ news-dashboard/
 | Frontend | React 19, TypeScript 5.9, Vite 7, Tailwind CSS 4, shadcn/ui |
 | Database | PostgreSQL 16 with pgvector extension (384-dim embeddings) |
 | Embeddings | sentence-transformers (default: paraphrase-multilingual-MiniLM-L12-v2) |
+| LLM | PydanticAI + Ollama (OpenAI-compatible provider) |
 | Package Managers | uv (backend), pnpm (frontend) |
 | Task Runner | mise (replaces Make) |
 
@@ -91,6 +92,7 @@ All routes are prefixed with `/api`:
 # Root (from project root)
 mise run setup          # First-time setup (copies .env, installs deps, starts infra, runs migrations)
 mise run dev            # Start everything (infra + backend + frontend)
+mise run up             # Deploy full stack with Docker Compose (frontend on localhost)
 mise run infra          # Start Docker services
 mise run infra-down     # Stop Docker services
 mise run infra-reset    # Reset all Docker volumes
@@ -113,9 +115,10 @@ mise run lint           # Lint frontend code
 
 ## Key Patterns
 
-- **Dedup**: Two-tier deduplication -- exact hash matching + semantic similarity (0.92 cosine threshold, 24h window)
+- **Dedup**: Three-stage deduplication -- exact hash + semantic similarity + LLM event verification
 - **Search**: Hybrid search using Reciprocal Rank Fusion (RRF) combining keyword (GIN/tsvector) and semantic (pgvector cosine) search
 - **Ingestion Pipeline**: Telegram listener (real-time) + polling (fallback) -> embed + dedup -> PostgreSQL, SSE push to frontend
+- **Trending**: `/api/stats/trending` builds multi-source event themes and ranks them with LLM editorial scoring
 
 ## When using MCP tools
 

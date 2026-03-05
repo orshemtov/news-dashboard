@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     media_max_file_size_mb: int = 50
     media_download_enabled: bool = True
 
+    # LLM (PydanticAI + Ollama)
+    llm_enabled: bool = True
+    llm_model: str = "ollama/deepseek-v2:lite"
+    llm_api_base: str | None = None  # e.g. http://localhost:11434
+    llm_api_key: str | None = "sk-placeholder"
+    llm_dedup_verify: bool = True
+
 
 @lru_cache
 def get_settings() -> Settings:

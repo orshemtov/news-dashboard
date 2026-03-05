@@ -2,8 +2,8 @@ import type { Article } from '@/types';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { isRtl, getDisplayTitle, getDisplayContent } from '@/lib/text';
-import { thumbnailUrl, formatDuration } from '@/lib/media';
-import { ExternalLink, Video, Play, Image, EyeOff, Eye } from 'lucide-react';
+import { mediaUrl, thumbnailUrl, formatDuration } from '@/lib/media';
+import { TrendingUp, ExternalLink, Video, Image, EyeOff, Eye } from 'lucide-react';
 
 export function timeAgo(dateStr: string): string {
   const now = Date.now();
@@ -32,16 +32,17 @@ function sourceColor(name: string): string {
 
 interface ArticleCardProps {
   article: Article;
-  onClick: () => void;
   onHide?: (e: React.MouseEvent) => void;
   isNew?: boolean;
   isHiddenOnlyMode?: boolean;
+  isTrending?: boolean;
+  trendCount?: number;
   onAnimationEnd?: () => void;
 }
 
-export function ArticleCard({ article, onClick, onHide, isNew, isHiddenOnlyMode, onAnimationEnd }: ArticleCardProps) {
+export function ArticleCard({ article, onHide, isNew, isHiddenOnlyMode, isTrending, trendCount, onAnimationEnd }: ArticleCardProps) {
   const title = getDisplayTitle(article.title, article.content);
-  const body = getDisplayContent(article.content, 280, title);
+  const body = getDisplayContent(article.content, undefined, title);
   const rtl = isRtl(article.content, article.language);
 
   const media = article.media_attachments ?? [];
@@ -52,19 +53,24 @@ export function ArticleCard({ article, onClick, onHide, isNew, isHiddenOnlyMode,
   const photoCount = media.filter((m) => m.type === 'photo').length;
   const videoCount = media.filter((m) => m.type === 'video').length;
 
-  const handleMediaClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    onClick();
+  const handleVideoPlay = (event: React.SyntheticEvent<HTMLVideoElement>) => {
+    const current = event.currentTarget;
+    const videos = document.querySelectorAll<HTMLVideoElement>('video[data-feed-video="true"]');
+    videos.forEach((video) => {
+      if (video !== current) {
+        video.pause();
+      }
+    });
   };
 
   return (
     <article
       className={cn(
-        'group cursor-pointer rounded-xl border border-border/30 bg-card p-4 transition-all',
+        'group rounded-xl border border-border/30 bg-card p-4 transition-all',
         'hover:border-primary/20 hover:bg-accent/40',
+        isTrending && 'border-orange-500/20 shadow-lg shadow-orange-500/5 ring-1 ring-orange-500/10 bg-gradient-to-br from-card to-orange-500/5',
         isNew && 'animate-article-enter',
       )}
-      onClick={onClick}
       onAnimationEnd={onAnimationEnd}
     >
       {/* Content */}
@@ -80,6 +86,13 @@ export function ArticleCard({ article, onClick, onHide, isNew, isHiddenOnlyMode,
           {article.is_duplicate && (
             <Badge variant="destructive" className="ml-1 text-[10px] px-1.5 py-0">
               dup
+            </Badge>
+          )}
+
+          {isTrending && (
+            <Badge variant="secondary" className="ml-1 bg-orange-500/15 text-orange-600 border-orange-500/20 text-[10px] px-1.5 py-0 hover:bg-orange-500/20">
+              <TrendingUp className="mr-1 size-2.5" />
+              Trending {trendCount && trendCount > 1 ? `(${trendCount})` : ''}
             </Badge>
           )}
 
@@ -114,7 +127,7 @@ export function ArticleCard({ article, onClick, onHide, isNew, isHiddenOnlyMode,
 
         {/* Title */}
         <h3
-          className="mt-1 text-[15px] font-normal leading-relaxed text-card-foreground line-clamp-3"
+          className="mt-1 text-[15px] font-normal leading-relaxed text-card-foreground"
           dir={rtl ? 'rtl' : 'ltr'}
         >
           {title}
@@ -123,7 +136,7 @@ export function ArticleCard({ article, onClick, onHide, isNew, isHiddenOnlyMode,
         {/* Body preview */}
         {body && (
           <p
-            className="mt-0.5 text-[15px] leading-relaxed text-muted-foreground line-clamp-3"
+            className="mt-0.5 whitespace-pre-wrap text-[15px] leading-relaxed text-muted-foreground"
             dir={rtl ? 'rtl' : 'ltr'}
           >
             {body}
@@ -132,31 +145,33 @@ export function ArticleCard({ article, onClick, onHide, isNew, isHiddenOnlyMode,
 
         {/* Media */}
         {thumbSrc && (
-          <div 
-            className="relative mt-3 overflow-hidden rounded-xl border border-border/30"
-            onClick={handleMediaClick}
-          >
+          <div className="relative mt-3 overflow-hidden rounded-xl border border-border/30">
             <div className="aspect-video w-full bg-muted">
-              <img
-                src={thumbSrc}
-                alt=""
-                className="h-full w-full object-contain"
-                loading="lazy"
-                onError={(e) => {
-                  (e.target as HTMLImageElement).style.display = 'none';
-                }}
-              />
+              {firstVideo ? (
+                <video
+                  src={mediaUrl(firstVideo.url)}
+                  controls
+                  preload="metadata"
+                  playsInline
+                  data-feed-video="true"
+                  onPlay={handleVideoPlay}
+                  className="h-full w-full object-contain"
+                >
+                  Your browser does not support the video tag.
+                </video>
+              ) : (
+                <img
+                  src={thumbSrc}
+                  alt=""
+                  className="h-full w-full object-contain"
+                  loading="lazy"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).style.display = 'none';
+                  }}
+                />
+              )}
             </div>
             
-            {/* Overlay for video indicator */}
-            {firstVideo && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="rounded-full bg-black/60 p-3 transition-transform group-hover:scale-110">
-                  <Play className="size-6 text-white" fill="white" />
-                </div>
-              </div>
-            )}
-
             {/* Video duration overlay */}
             {firstVideo?.duration != null && firstVideo.duration > 0 && (
               <span className="absolute bottom-2 left-2 rounded bg-black/75 px-1.5 py-0.5 text-[11px] font-medium text-white">

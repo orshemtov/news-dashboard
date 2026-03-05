@@ -42,6 +42,7 @@ def _apply_filters(
     languages_exclude: list[str] | None = None,
     forwarded: bool | None = None,
     exclude_keywords: list[str] | None = None,
+    dedup_cluster_id: UUID | None = None,
     include_hidden: bool = False,
 ) -> Select:
     """Apply all supported filters to a SELECT statement."""
@@ -62,6 +63,8 @@ def _apply_filters(
         stmt = stmt.where(Article.published_at >= from_date)
     if to_date is not None:
         stmt = stmt.where(Article.published_at <= to_date)
+    if dedup_cluster_id is not None:
+        stmt = stmt.where(Article.dedup_cluster_id == dedup_cluster_id)
 
     # Facet-style multi-value filters
     if sources_include:
@@ -153,6 +156,7 @@ async def get_facets(
     languages_exclude: list[str] | None = Query(None),
     forwarded: bool | None = None,
     exclude_keywords: list[str] | None = Query(None),
+    dedup_cluster_id: UUID | None = None,
     db: AsyncSession = Depends(get_db),
 ) -> FacetsResponse:
     """Return aggregated facet counts using cross-dimensional filtering.
@@ -174,6 +178,7 @@ async def get_facets(
         from_date=from_date,
         to_date=to_date,
         exclude_keywords=exclude_keywords,
+        dedup_cluster_id=dedup_cluster_id,
         languages_include=languages_include,
         languages_exclude=languages_exclude,
         forwarded=forwarded,
@@ -197,6 +202,7 @@ async def get_facets(
         from_date=from_date,
         to_date=to_date,
         exclude_keywords=exclude_keywords,
+        dedup_cluster_id=dedup_cluster_id,
         sources_include=sources_include,
         sources_exclude=sources_exclude,
         forwarded=forwarded,
@@ -223,6 +229,7 @@ async def get_facets(
         from_date=from_date,
         to_date=to_date,
         exclude_keywords=exclude_keywords,
+        dedup_cluster_id=dedup_cluster_id,
         sources_include=sources_include,
         sources_exclude=sources_exclude,
         languages_include=languages_include,
@@ -269,6 +276,7 @@ async def list_articles(
     languages_exclude: list[str] | None = Query(None),
     forwarded: bool | None = None,
     exclude_keywords: list[str] | None = Query(None),
+    dedup_cluster_id: UUID | None = None,
     include_hidden: bool = False,
     db: AsyncSession = Depends(get_db),
 ) -> ArticleListResponse:
@@ -288,6 +296,7 @@ async def list_articles(
         languages_exclude=languages_exclude,
         forwarded=forwarded,
         exclude_keywords=exclude_keywords,
+        dedup_cluster_id=dedup_cluster_id,
         include_hidden=include_hidden,
     )
 

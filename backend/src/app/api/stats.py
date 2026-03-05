@@ -1,6 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Query
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,8 +8,25 @@ from app.db import get_db
 from app.models.article import Article
 from app.models.source import Source
 from app.schemas.stats import DashboardStats
+from app.services.theme import ThemeService
 
 router = APIRouter(tags=["stats"])
+
+
+@router.get("/trending")
+async def get_trending_themes(
+    window_minutes: int = Query(180, ge=30, le=720),
+    limit: int = Query(10, ge=1, le=20),
+    min_sources: int = Query(2, ge=1, le=10),
+    db: AsyncSession = Depends(get_db),
+) -> list[dict]:
+    """Get trending themes/clusters from the last X minutes."""
+    svc = ThemeService(db)
+    return await svc.get_trending_themes(
+        window_minutes=window_minutes,
+        limit=limit,
+        min_sources=min_sources,
+    )
 
 
 @router.get("/", response_model=DashboardStats)

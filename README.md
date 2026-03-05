@@ -1,6 +1,6 @@
 # Pulse
 
-A real-time news aggregator that collects articles from Telegram channels, deduplicates them using semantic similarity, and provides hybrid search (keyword + vector). Built for speed -- articles appear in your feed within seconds of being posted.
+A real-time news aggregator that collects articles from Telegram channels, deduplicates them using semantic similarity + LLM verification, and provides hybrid search (keyword + vector). Built for speed -- articles appear in your feed within seconds of being posted.
 
 ![Feed - Dark](docs/feed-dark.png)
 
@@ -15,7 +15,7 @@ A real-time news aggregator that collects articles from Telegram channels, dedup
 
 ### Real-Time Feed
 
-Articles stream in via Server-Sent Events (SSE) -- no manual refresh needed. Each article shows source name, relative timestamp, and a direct link to the original Telegram post. Rich media (images, videos with duration badges) renders inline.
+Articles stream in via Server-Sent Events (SSE) -- no manual refresh needed. Each article shows source name, relative timestamp, and a direct link to the original Telegram post. Rich media (images, videos with sound on native play) renders inline.
 
 ![Feed with media](docs/feed-scroll2-dark.png)
 
@@ -24,7 +24,9 @@ Articles stream in via Server-Sent Events (SSE) -- no manual refresh needed. Eac
 - **Pagination** -- 20 articles per page
 - **RTL support** -- automatic right-to-left layout for Hebrew, Arabic, Farsi, Urdu
 - **Stats bar** -- total articles, today's count, active sources, last update time
-- **Article detail** -- click any article to see full content with source link
+- **Inline reading** -- no article modal; content and media stay in-feed
+- **Trending themes** -- right sidebar with top multi-source events and one-click cluster filtering
+- **Health status** -- header indicator for backend connectivity
 
 ![Article detail](docs/article-detail.png)
 
@@ -54,6 +56,7 @@ Search for any public Telegram channel and add it with one click:
 - **Responsive layout** with sticky header
 - **Telegram content cleaning** -- strips formatting artifacts
 - **Media proxy** -- serves Telegram images and videos through the backend
+- **Version badge** -- header shows current frontend build version/time
 
 ## Tech Stack
 
@@ -63,6 +66,7 @@ Search for any public Telegram channel and add it with one click:
 | Frontend | React 19, TypeScript, Vite 7, Tailwind CSS 4, shadcn/ui |
 | Database | PostgreSQL 16 with pgvector (384-dim embeddings) |
 | Embeddings | sentence-transformers (paraphrase-multilingual-MiniLM-L12-v2) |
+| LLM | PydanticAI + Ollama (OpenAI-compatible endpoint) |
 | Task Runner | [mise](https://mise.jdx.dev/) |
 
 ## Prerequisites
@@ -110,6 +114,14 @@ mise run dev
 This starts infrastructure (Docker), runs migrations, and launches:
 - **Backend API** at http://localhost:8000
 - **Frontend** at http://localhost:5173
+
+### Deploy with Docker Compose
+
+```bash
+mise run up
+```
+
+This builds and runs the full stack in containers (frontend served on `http://localhost`, backend on `http://localhost:8000`).
 
 ### Start components individually
 
@@ -176,6 +188,10 @@ All configuration is through environment variables in `.env`. The defaults in `.
 | `INITIAL_BACKFILL_HOURS` | `24` | Hours of history to backfill on first run |
 | `POLLING_ENABLED` | `true` | Enable/disable source polling |
 | `POLLING_INTERVAL_SECONDS` | `300` | Source polling interval |
+| `LLM_ENABLED` | `true` | Enable LLM features (summaries, dedup verification, trending ranking) |
+| `LLM_MODEL` | `ollama/deepseek-v2:lite` | Local Ollama model name |
+| `LLM_API_BASE` | | Ollama base URL (e.g. `http://localhost:11434` or `http://host.docker.internal:11434`) |
+| `LLM_DEDUP_VERIFY` | `true` | Use LLM to confirm semantic duplicates |
 
 ## Architecture
 
@@ -216,7 +232,22 @@ Two complementary ingestion paths run simultaneously:
 Two-tier system to catch both exact and near-duplicate articles:
 
 1. **Exact hash** -- SHA-256 of normalized content. Exact duplicates are silently skipped.
-2. **Semantic similarity** -- pgvector cosine distance against articles within a configurable time window (default 24h). Articles above the threshold (default 0.92) are stored but marked as `is_duplicate=true`.
+2. **Semantic similarity** -- pgvector cosine distance against articles within a configurable time window (default 24h).
+3. **LLM verification** -- PydanticAI/Ollama checks whether candidate pairs are truly the same event before assigning duplicate clusters.
+
+### Trending Themes
+
+`/api/stats/trending` builds trending event cards from dedup clusters and supports query params:
+
+- `window_minutes` (default `180`)
+- `limit` (default `10`)
+- `min_sources` (default `2`)
+
+Ranking uses a hybrid score:
+
+1. Base score from unique source count, article count, and recency
+2. LLM editorial importance score (dominant)
+3. LLM-generated one-line event summary per cluster
 
 ### Hybrid Search (RRF)
 

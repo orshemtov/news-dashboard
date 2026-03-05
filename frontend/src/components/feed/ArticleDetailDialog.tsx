@@ -239,16 +239,18 @@ function MediaLightbox({
       >
         {att.type === 'photo' ? (
           <img
+            key={att.url}
             src={mediaUrl(att.url)}
             alt=""
             className="max-h-[85vh] max-w-[90vw] rounded object-contain"
           />
         ) : (
           <video
+            key={att.url}
             src={mediaUrl(att.url)}
             controls
-            autoPlay
-            muted
+            preload="metadata"
+            playsInline
             className="max-h-[85vh] max-w-[90vw] rounded"
           >
             Your browser does not support the video tag.

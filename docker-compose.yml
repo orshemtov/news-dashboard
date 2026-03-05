@@ -45,6 +45,10 @@ services:
       TELEGRAM_SESSION_NAME: /app/sessions/news_dashboard
       # Persist media files in a volume
       MEDIA_STORAGE_PATH: /app/media
+      # LLM connection (connect to Ollama on host)
+      LLM_API_BASE: http://host.docker.internal:11434
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     volumes:
       # Persist Telegram session file across container restarts
       - telegram_sessions:/app/sessions
